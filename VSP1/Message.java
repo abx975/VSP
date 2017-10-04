@@ -3,7 +3,6 @@
  * To change this template file, choose Tools | Templates
  * and open the template in the editor.
  */
-package vsp1;
 
 import java.sql.Timestamp;
 import java.util.Date;
