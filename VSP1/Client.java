@@ -21,6 +21,7 @@ public class Client {
       System.out.println(result);
       result = server.nextMessage("client1");
       System.out.println(result);
+        System.out.println("3 = 2 + 1 = " + server.add(2, 1));
       
     } catch(Exception ex) {
       ex.printStackTrace();

@@ -34,6 +34,6 @@ public class Message {
 
     @Override
     public String toString() {
-        return this.messageId + " " + this.clientId + ": " + this.message + this.timestamp;
+        return this.messageId + " " + this.clientId + ": " + this.message + " " + this.timestamp;
     }
 }
