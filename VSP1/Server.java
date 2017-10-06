@@ -1,4 +1,10 @@
-
+/**
+ * Verteilte Systeme Aufgabe 1: Client/Server-Anwendung 
+ * "Verteilte Nachrichten-Queue"
+ * Gruppe 3
+ * Nils.eggebrecht@haw-hamburg.de
+ * Lennart.hartmann@haw-hamburg.de
+ */
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -18,17 +24,50 @@ import java.util.NoSuchElementException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-//import HelloServer;
+/**
+ * Server als Back-End zum Speichern und Verwalten von Nachrichten mit Steuerung
+ * durch entfernte Methodenaufrufe ueber Java RMI
+ * @author Nils Eggebrecht
+ * @author Lennart Hartmann
+ * @version 06.10.2017
+ */
 public class Server extends UnicastRemoteObject implements MessageService {
-
+    /*
+    Laufende Nummer als ID von Nachrichten gemaess der Reihenfolge ihres 
+    Eintreffens
+    */
     static int messageID = 0;
+    /*
+    
+    */
     int t;
+    /*
+    Der am laegsten inaktive Client
+    */
     String inactiveClient;
+    /*
+    Liste der empfangenen Nachrichten mit begrenzter Kapazitaet
+    */
     LinkedBlockingQueue<Message> fifo;
+    /*
+    Ordnet bekannten Clients die letzte ausgelieferte Nachricht zu
+    */
     HashMap<String, Message> lastMessagesDelivered;
+     /*
+    Ordnet bekannten Clients den Zeitpunkt ihrer letzten Aktivitaet zu 
+    */
     HashMap<String, Timestamp> latestClientAcceses;
+    /*
+    Iterator für letzte zugestellte Nachrichten
+    */
     Iterator<Message> it;
+    /*
+    Iterator für letzte Aktivitaeten
+    */
     Iterator<String> iter;
+    /*
+    Stream zum Speichern des Logs in "logfile.txt"
+    */
     static FileOutputStream file;
 
     public Server() throws RemoteException {
@@ -37,14 +76,10 @@ public class Server extends UnicastRemoteObject implements MessageService {
         } catch (IOException e) {
             System.out.println("File Öffnen gescheitert");
         }
-
-        int deliveryQueueSize = 10;
-        //int deliveryQueueSize = 100;
+        
+        int deliveryQueueSize = 10;        
         this.fifo = new LinkedBlockingQueue(deliveryQueueSize);
-        //this.t = 60000; // 1min
         this.t = 15000; // 15s
-        //this.t = 60000; // 1min
-        //this.t = 600000; // 10min
         this.lastMessagesDelivered = new HashMap<>();
         this.latestClientAcceses = new HashMap<>();
     }
@@ -56,6 +91,10 @@ public class Server extends UnicastRemoteObject implements MessageService {
         this.latestClientAcceses = new HashMap<>();
     }
 
+    /*
+    Gewaehrleistet at-most-once Fehlersemantik durch Einsprung nach Finden der
+    letzten an den Client versandten Nachricht
+    */
     @Override
     public String nextMessage(String clientID) throws RemoteException {
         recordAccessTime(clientID);
@@ -91,14 +130,8 @@ public class Server extends UnicastRemoteObject implements MessageService {
         return retVal;
     }
 
-    /**
-     *
-     * @param clientID
-     * @param message
-     * @throws RemoteException
-     */
+ 
     @Override
-
     public void newMessage(String clientID, String message) throws RemoteException {
         recordAccessTime(clientID);
         if (fifo.remainingCapacity() == 0) {
@@ -114,11 +147,19 @@ public class Server extends UnicastRemoteObject implements MessageService {
         }
     }
 
+    /**
+     * Inkrementiert ID bei Eingang einer neuen Machricht
+     * @return die naechste ID zur Kennzeichnung einer Nachricht
+     */
     private int getNextMessageId() {
         messageID++;
         return messageID;
     }
 
+    /**
+     * Dokumentiert den Zugriffs des gegebenen Client
+     * @param clientID  die IP-Adresse des zugreifenden Clients
+     */
     private void recordAccessTime(String clientID) {
         try {
             if (inactiveClient.equals(clientID)) {
@@ -139,7 +180,11 @@ public class Server extends UnicastRemoteObject implements MessageService {
             ne.printStackTrace();
         }
     }
-
+    
+    /**
+     * Setzt den am laengsten inaktiven Client, zu welchem noch Daten gehalten 
+     * werden
+     */
     private void getNewInactiveClient() {
         Timestamp oldestTime = null;
         String currentClient = null;
@@ -173,6 +218,8 @@ public class Server extends UnicastRemoteObject implements MessageService {
         }
     }
 
+    
+    @Override
     public String showAll() throws RemoteException {   
         it = fifo.iterator();
         String retVal = "";
