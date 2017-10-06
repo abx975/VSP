@@ -1,8 +1,15 @@
 
+import java.io.FileOutputStream;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.net.MalformedURLException;
+import java.rmi.AlreadyBoundException;
+import java.rmi.Naming;
 import java.rmi.server.UnicastRemoteObject;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
+import java.rmi.server.RemoteServer;
 import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashMap;
@@ -23,8 +30,16 @@ public class Server extends UnicastRemoteObject implements MessageService {
     HashMap<String, Timestamp> latestClientAcceses;
     Iterator<Message> it;
     Iterator<String> iter;
+    static FileOutputStream file;
+    
 
     public Server() throws RemoteException {
+        try{
+            file = new FileOutputStream("logfile.txt");
+        }catch(IOException e){
+            System.out.println("File Öffnen gescheitert");
+        }
+        
         int deliveryQueueSize = 10;
         //int deliveryQueueSize = 100;
         this.fifo = new LinkedBlockingQueue(deliveryQueueSize);
@@ -154,19 +169,45 @@ public class Server extends UnicastRemoteObject implements MessageService {
         System.out.println("Der Älteste ist: " + inactiveClient);
     }
 
-    public static void main(String[] args) throws RemoteException {
-        LocateRegistry.createRegistry(Registry.REGISTRY_PORT);
+    public static void main(String[] args) throws RemoteException, AlreadyBoundException {
+        try {
+            //LocateRegistry.createRegistry(Registry.REGISTRY_PORT);
+            
+            Server server = new Server();
+            // gibt die Lognachrichten jedes Aufrufs auf der Konsole aus, kann sicher auch in ein Log file schreiben
+            RemoteServer.setLog(file);//System.out);
+//        Registry registry = LocateRegistry.getRegistry();
+            Registry registry = LocateRegistry.createRegistry(1099);
+            System.out.println("try : naming RemoteObject");
+            //".re..."
+            Naming.rebind("Server", server);
 
-        Server server = new Server();
-        // gibt die Lognachrichten jedes Aufrufs auf der Konsole aus, kann sicher auch in ein Log file schreiben
-        // RemoteServer.setLog(System.out);
-        Registry registry = LocateRegistry.getRegistry();
-        registry.rebind("MessageService", server);
-        System.out.println("Server angemeldet");
+
+//        try{
+//         Naming.rebind("MessageService", server);
+//        } catch (MalformedURLException ex) {
+//            System.out.println("/////////////// Naming.bind() ////////////////");
+//            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+//        }
+         
+//        registry.rebind("MessageService", server);
+System.out.println("Server angemeldet");
+        } catch (MalformedURLException ex) {
+            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
+        }
     }
 
-    @Override
-    public int add(int x, int y) {
-        return x + y;
+    public String showAll() throws RemoteException{
+//       
+//        System.out.println("------------Server.showAll()----------------");
+//        
+       it=fifo.iterator();
+       String retVal="";
+       Message curMsg;
+       while(it.hasNext()){
+           curMsg=it.next();
+           retVal+=curMsg.toString()+"\n";
+       }
+       return retVal;
     }
 }

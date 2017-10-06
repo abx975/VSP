@@ -4,8 +4,12 @@
  * and open the template in the editor.
  */
 
+import java.net.InetAddress;
+import java.net.MalformedURLException;
+import java.net.UnknownHostException;
 import java.rmi.RemoteException;
 import java.rmi.Naming;
+import java.rmi.NotBoundException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.util.logging.Level;
@@ -27,13 +31,23 @@ public class Client extends Application {
 
     static MessageService server;
     static Registry registry;
+    public static int MAX_FAILIURE_TIME = 10000;
+    private int failiureTime = 0;
+    private String CLIENT_ID;
 
+    String currentMsg;
     Stub stub = new Stub();
     Button receiveBtn = new Button("receive next message");
     Button sendBtn = new Button("send Message");
     Button connectBtn = new Button("connect");
     Button showAllBtn = new Button("show all");
 
+    public Client() throws UnknownHostException{
+        CLIENT_ID=InetAddress.getLocalHost().toString();
+        CLIENT_ID=CLIENT_ID.split("/")[1];
+        System.out.println("Client created: "+this);
+    }
+    
     /**
      * For testing purposes only
      */
@@ -58,11 +72,33 @@ public class Client extends Application {
             System.out.println(result);
             result = server.nextMessage("client2");
             System.out.println(result);
-            System.out.println("3 = 2 + 1 = " + server.add(2, 1));
         } catch (RemoteException e) {
             System.out.println("Client.main()");
         }
     }
+
+    private void sendMsg() {
+        System.out.println(currentMsg);
+
+        try {
+            server.newMessage(this.toString(), currentMsg);
+            failiureTime = 0;
+
+        } catch (RemoteException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+            if (failiureTime < MAX_FAILIURE_TIME) {
+                sendMsg();
+            }
+            try {
+                this.wait(500);
+            } catch (InterruptedException ex1) {
+                Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex1);
+                failiureTime += 500;
+            }
+        }
+    }
+
+ 
 
     @Override
     public void start(Stage primaryStage) {
@@ -75,9 +111,9 @@ public class Client extends Application {
         grid.setHgap(5);
         //Defining the Name text field
         final TextField nextMsgField = new TextField();
-        
+
         nextMsgField.setMinWidth(400);
-        
+
         nextMsgField.setPromptText("");
         nextMsgField.setPrefColumnCount(10);
         nextMsgField.getText();
@@ -105,29 +141,38 @@ public class Client extends Application {
         grid.getChildren().add(showAllBtn);
 
         receiveBtn.setOnAction(e -> {
-            System.out.println("receiving message");
+            System.out.println(this);
             try {
                 nextMsgField.setText(server.nextMessage(this.toString()));
+          
             } catch (RemoteException ex) {
                 Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
             }
         });
 
         sendBtn.setOnAction(e -> {
-            System.out.println(newMsgField.getText());
-            try {
-                server.newMessage(this.toString(), newMsgField.getText());
-            } catch (RemoteException ex) {
-                Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
-            }
+            currentMsg = newMsgField.getText();
+            sendMsg();
         });
 
         connectBtn.setOnAction(e -> {
-                System.out.println("connecting to server");
+            String servChoice = serverField.getText();
+            if (servChoice.length() == 0) {
+                reconnect();
+            } else {
+                reconnect(servChoice);
+            }
+            System.out.println("connecting to server");
         });
 
         showAllBtn.setOnAction(e -> {
-            stub.printAll();
+            try {
+                //            stub.printAll();
+                System.out.println(server.showAll());
+            } catch (RemoteException ex) {
+                System.out.println("request failed");
+                Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+            }
         });
 
         StackPane root = new StackPane();
@@ -140,13 +185,40 @@ public class Client extends Application {
         primaryStage.show();
     }
 
-    public static void main(String[] args) {
+    public static void reconnect() {
         try {
-            registry = LocateRegistry.getRegistry();
-            server = (MessageService) Naming.lookup("MessageService");
-        } catch (Exception e) {
-            e.printStackTrace();
+            server = (MessageService) Naming.lookup("//127.0.0.1:1099/Server");
+        } catch (NotBoundException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (MalformedURLException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (RemoteException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
         }
+    }
+
+    public static void reconnect(String servStr) {
+        try {
+            server = (MessageService) Naming.lookup(servStr);
+        } catch (NotBoundException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (MalformedURLException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        } catch (RemoteException ex) {
+            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+    @Override
+    public String toString() {
+        return this.CLIENT_ID;
+    }
+    
+    
+
+    public static void main(String[] args) {
+        reconnect();
+        System.out.println("Client:connected");
         Application.launch(args);
     }
 }
