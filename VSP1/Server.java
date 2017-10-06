@@ -3,7 +3,6 @@ import java.rmi.server.UnicastRemoteObject;
 import java.rmi.RemoteException;
 import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
-import java.rmi.server.RemoteServer;
 import java.sql.Timestamp;
 import java.util.Date;
 import java.util.HashMap;
@@ -26,9 +25,13 @@ public class Server extends UnicastRemoteObject implements MessageService {
     Iterator<String> iter;
 
     public Server() throws RemoteException {
-        int deliveryQueueSize = 100;
+        int deliveryQueueSize = 10;
+        //int deliveryQueueSize = 100;
         this.fifo = new LinkedBlockingQueue(deliveryQueueSize);
-        this.t = 600000; // 10min
+        //this.t = 60000; // 1min
+        this.t = 15000; // 15s
+        //this.t = 60000; // 1min
+        //this.t = 600000; // 10min
         this.lastMessagesDelivered = new HashMap<>();
         this.latestClientAcceses = new HashMap<>();
     }
@@ -49,16 +52,15 @@ public class Server extends UnicastRemoteObject implements MessageService {
         recordAccessTime(clientID);
         it = fifo.iterator();
         String retVal = "null junge";
-        Message msg;
+        Message msg = null;
         while (it.hasNext()) {
             msg = it.next();
             try {
-                if (null == lastMessagesDelivered.get(clientID)) {
+                if (lastMessagesDelivered.get(clientID) == null) {
                     retVal = msg.toString();
                     System.out.println("erste Nachricht retVal: " + msg);
                     lastMessagesDelivered.put(clientID, msg);
                     return retVal;
-
                 } else if (msg.messageId == (lastMessagesDelivered.get(clientID).messageId)) {
                     try {
                         msg = it.next();
@@ -75,6 +77,10 @@ public class Server extends UnicastRemoteObject implements MessageService {
                 ne.printStackTrace();
             }
         }
+        if (msg.messageId != (lastMessagesDelivered.get(clientID).messageId)) {
+            retVal =fifo.peek().toString();
+            lastMessagesDelivered.put(clientID, fifo.peek());
+        }
         return retVal;
     }
 
@@ -88,7 +94,7 @@ public class Server extends UnicastRemoteObject implements MessageService {
 
     public void newMessage(String clientID, String message) throws RemoteException {
         recordAccessTime(clientID);
-        System.out.println(message);
+        //System.out.println(message);
         if (fifo.remainingCapacity() == 0) {
             fifo.poll();
         }
