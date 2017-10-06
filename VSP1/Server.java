@@ -1,6 +1,5 @@
 
 import java.io.FileOutputStream;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.rmi.AlreadyBoundException;
@@ -31,15 +30,14 @@ public class Server extends UnicastRemoteObject implements MessageService {
     Iterator<Message> it;
     Iterator<String> iter;
     static FileOutputStream file;
-    
 
     public Server() throws RemoteException {
-        try{
+        try {
             file = new FileOutputStream("logfile.txt");
-        }catch(IOException e){
+        } catch (IOException e) {
             System.out.println("File Öffnen gescheitert");
         }
-        
+
         int deliveryQueueSize = 10;
         //int deliveryQueueSize = 100;
         this.fifo = new LinkedBlockingQueue(deliveryQueueSize);
@@ -58,10 +56,6 @@ public class Server extends UnicastRemoteObject implements MessageService {
         this.latestClientAcceses = new HashMap<>();
     }
 
-    public String sayHello() {
-        return "Hello World";
-    }
-
     @Override
     public String nextMessage(String clientID) throws RemoteException {
         recordAccessTime(clientID);
@@ -73,7 +67,6 @@ public class Server extends UnicastRemoteObject implements MessageService {
             try {
                 if (lastMessagesDelivered.get(clientID) == null) {
                     retVal = msg.toString();
-                    System.out.println("erste Nachricht retVal: " + msg);
                     lastMessagesDelivered.put(clientID, msg);
                     return retVal;
                 } else if (msg.messageId == (lastMessagesDelivered.get(clientID).messageId)) {
@@ -83,7 +76,6 @@ public class Server extends UnicastRemoteObject implements MessageService {
                     } catch (NoSuchElementException e) {
                         retVal = null;
                     }
-                    System.out.println("weitere Nachricht retVal: " + msg);
                     lastMessagesDelivered.put(clientID, msg);
                     return retVal;
                 }
@@ -93,7 +85,7 @@ public class Server extends UnicastRemoteObject implements MessageService {
             }
         }
         if (msg.messageId != (lastMessagesDelivered.get(clientID).messageId)) {
-            retVal =fifo.peek().toString();
+            retVal = fifo.peek().toString();
             lastMessagesDelivered.put(clientID, fifo.peek());
         }
         return retVal;
@@ -109,14 +101,12 @@ public class Server extends UnicastRemoteObject implements MessageService {
 
     public void newMessage(String clientID, String message) throws RemoteException {
         recordAccessTime(clientID);
-        //System.out.println(message);
         if (fifo.remainingCapacity() == 0) {
             fifo.poll();
         }
         try {
             Message msg = new Message(getNextMessageId(), clientID, message, new Timestamp(new Date().getTime()));
             fifo.put(msg);
-            //System.out.println("Fifosize++; fifosize = " + fifo.size() + " " + "die neuste Nachricht ist: " + msg);
 
         } catch (InterruptedException ex) {
             Logger.getLogger(Server.class
@@ -136,7 +126,6 @@ public class Server extends UnicastRemoteObject implements MessageService {
             }
         } catch (NullPointerException e) {
             inactiveClient = clientID;
-            System.out.println("CATCH inactive Client wird gesezt!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
         }
         try {
             latestClientAcceses.put(clientID, new Timestamp(new Date().getTime()));
@@ -152,62 +141,46 @@ public class Server extends UnicastRemoteObject implements MessageService {
     }
 
     private void getNewInactiveClient() {
-        Timestamp oldestTime;
-        String currentClient;
+        Timestamp oldestTime = null;
+        String currentClient = null;
         String oldestClientKey = null;
 
         oldestTime = new Timestamp(new Date().getTime());
         iter = latestClientAcceses.keySet().iterator();
         while (iter.hasNext()) {
             currentClient = iter.next();
-            if (latestClientAcceses.get(currentClient).before(oldestTime)) {
+            if (latestClientAcceses.get(currentClient).before(oldestTime) || latestClientAcceses.get(currentClient).equals(oldestTime)) {
                 oldestTime = latestClientAcceses.get(currentClient);
                 oldestClientKey = currentClient;
             }
         }
         inactiveClient = oldestClientKey;
-        System.out.println("Der Älteste ist: " + inactiveClient);
     }
 
     public static void main(String[] args) throws RemoteException, AlreadyBoundException {
         try {
             //LocateRegistry.createRegistry(Registry.REGISTRY_PORT);
-            
+
             Server server = new Server();
             // gibt die Lognachrichten jedes Aufrufs auf der Konsole aus, kann sicher auch in ein Log file schreiben
             RemoteServer.setLog(file);//System.out);
-//        Registry registry = LocateRegistry.getRegistry();
             Registry registry = LocateRegistry.createRegistry(1099);
             System.out.println("try : naming RemoteObject");
-            //".re..."
             Naming.rebind("Server", server);
-
-
-//        try{
-//         Naming.rebind("MessageService", server);
-//        } catch (MalformedURLException ex) {
-//            System.out.println("/////////////// Naming.bind() ////////////////");
-//            Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
-//        }
-         
-//        registry.rebind("MessageService", server);
-System.out.println("Server angemeldet");
+            System.out.println("Server angemeldet");
         } catch (MalformedURLException ex) {
             Logger.getLogger(Server.class.getName()).log(Level.SEVERE, null, ex);
         }
     }
 
-    public String showAll() throws RemoteException{
-//       
-//        System.out.println("------------Server.showAll()----------------");
-//        
-       it=fifo.iterator();
-       String retVal="";
-       Message curMsg;
-       while(it.hasNext()){
-           curMsg=it.next();
-           retVal+=curMsg.toString()+"\n";
-       }
-       return retVal;
+    public String showAll() throws RemoteException {   
+        it = fifo.iterator();
+        String retVal = "";
+        Message curMsg;
+        while (it.hasNext()) {
+            curMsg = it.next();
+            retVal += curMsg.toString() + "\n";
+        }
+        return retVal;
     }
 }
