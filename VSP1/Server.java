@@ -9,6 +9,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.Iterator;
+import java.util.NoSuchElementException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -49,23 +50,31 @@ public class Server extends UnicastRemoteObject implements MessageService {
         it = fifo.iterator();
         String retVal = "null junge";
         Message msg;
-//        while (it.hasNext()) {
-//            msg = it.next();
-//            try {
-//                if (msg.messageId == (lastMessagesDelivered.get(clientID).messageId)) {
-//                    retVal = msg.toString();
-//                    lastMessagesDelivered.put(clientID, msg);
-//                    return retVal;
-//                }
-//            } catch (NullPointerException ne) {
-//                ne.printStackTrace();
-//            }
-//        }
-        try {
-        retVal= fifo.poll().toString();
-        } catch (NullPointerException ne) {
+        while (it.hasNext()) {
+            msg = it.next();
+            try {
+                if (null == lastMessagesDelivered.get(clientID)) {
+                    retVal = msg.toString();
+                    System.out.println("erste Nachricht retVal: " + msg);
+                    lastMessagesDelivered.put(clientID, msg);
+                    return retVal;
+
+                } else if (msg.messageId == (lastMessagesDelivered.get(clientID).messageId)) {
+                    try {
+                        msg = it.next();
+                        retVal = msg.toString();
+                    } catch (NoSuchElementException e) {
+                        retVal = null;
+                    }
+                    System.out.println("weitere Nachricht retVal: " + msg);
+                    lastMessagesDelivered.put(clientID, msg);
+                    return retVal;
+                }
+
+            } catch (NullPointerException ne) {
                 ne.printStackTrace();
             }
+        }
         return retVal;
     }
 
@@ -78,21 +87,20 @@ public class Server extends UnicastRemoteObject implements MessageService {
     @Override
 
     public void newMessage(String clientID, String message) throws RemoteException {
-
         recordAccessTime(clientID);
-
         System.out.println(message);
         if (fifo.remainingCapacity() == 0) {
             fifo.poll();
         }
         try {
-            fifo.put(new Message(getNextMessageId(), clientID, message, new Timestamp(new Date().getTime())));
-            System.out.println("ein Element wurde in den Fifo gepackt und die fifosize = " + fifo.size() + " " + "der Head ist aktuell " + fifo.peek());
+            Message msg = new Message(getNextMessageId(), clientID, message, new Timestamp(new Date().getTime()));
+            fifo.put(msg);
+            //System.out.println("Fifosize++; fifosize = " + fifo.size() + " " + "die neuste Nachricht ist: " + msg);
+
         } catch (InterruptedException ex) {
             Logger.getLogger(Server.class
                     .getName()).log(Level.SEVERE, null, ex);
         }
-
     }
 
     private int getNextMessageId() {
@@ -101,35 +109,43 @@ public class Server extends UnicastRemoteObject implements MessageService {
     }
 
     private void recordAccessTime(String clientID) {
-
-        latestClientAcceses.put(clientID, new Timestamp(new Date().getTime()));
-//        Timestamp currentTime_minus_T = new Timestamp(new Date().getTime() - t);
-//        try {
-//            if (currentTime_minus_T.after(latestClientAcceses.get(inactiveClient))) {
-//                latestClientAcceses.remove(inactiveClient);
-//                lastMessagesDelivered.remove(inactiveClient);
-//                getNewInactiveClient();
-//            }
-//        } catch (NullPointerException ne) {
-//            ne.printStackTrace();
-//        }
+        try {
+            if (inactiveClient.equals(clientID)) {
+                getNewInactiveClient();
+            }
+        } catch (NullPointerException e) {
+            inactiveClient = clientID;
+            System.out.println("CATCH inactive Client wird gesezt!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+        }
+        try {
+            latestClientAcceses.put(clientID, new Timestamp(new Date().getTime()));
+            Timestamp currentTime_minus_T = new Timestamp(new Date().getTime() - t);
+            if (currentTime_minus_T.after(latestClientAcceses.get(inactiveClient))) {
+                latestClientAcceses.remove(inactiveClient);
+                lastMessagesDelivered.remove(inactiveClient);
+                getNewInactiveClient();
+            }
+        } catch (NullPointerException ne) {
+            ne.printStackTrace();
+        }
     }
 
     private void getNewInactiveClient() {
-//        Timestamp oldestTime;
-//        String currentClient;
-//        String oldestClientKey = null;
-//
-//        oldestTime = new Timestamp(new Date().getTime());
-//        iter = latestClientAcceses.keySet().iterator();
-//        while (iter.hasNext()) {
-//            currentClient = iter.next();
-//            if (latestClientAcceses.get(currentClient).before(oldestTime)) {
-//                oldestTime = latestClientAcceses.get(currentClient);
-//                oldestClientKey = currentClient;
-//            }
-//        }
-//        inactiveClient = oldestClientKey;
+        Timestamp oldestTime;
+        String currentClient;
+        String oldestClientKey = null;
+
+        oldestTime = new Timestamp(new Date().getTime());
+        iter = latestClientAcceses.keySet().iterator();
+        while (iter.hasNext()) {
+            currentClient = iter.next();
+            if (latestClientAcceses.get(currentClient).before(oldestTime)) {
+                oldestTime = latestClientAcceses.get(currentClient);
+                oldestClientKey = currentClient;
+            }
+        }
+        inactiveClient = oldestClientKey;
+        System.out.println("Der Älteste ist: " + inactiveClient);
     }
 
     public static void main(String[] args) throws RemoteException {
@@ -137,10 +153,9 @@ public class Server extends UnicastRemoteObject implements MessageService {
 
         Server server = new Server();
         // gibt die Lognachrichten jedes Aufrufs auf der Konsole aus, kann sicher auch in ein Log file schreiben
-        //RemoteServer.setLog(System.out);
+        // RemoteServer.setLog(System.out);
         Registry registry = LocateRegistry.getRegistry();
         registry.rebind("MessageService", server);
-
         System.out.println("Server angemeldet");
     }
 
