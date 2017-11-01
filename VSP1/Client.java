@@ -1,11 +1,9 @@
+
 /**
- * Verteilte Systeme Aufgabe 1: Client/Server-Anwendung 
- * "Verteilte Nachrichten-Queue"
- * Gruppe 3
- * Nils.eggebrecht@haw-hamburg.de
+ * Verteilte Systeme Aufgabe 1: Client/Server-Anwendung "Verteilte
+ * Nachrichten-Queue" Gruppe 3 Nils.eggebrecht@haw-hamburg.de
  * Lennart.hartmann@haw-hamburg.de
  */
-
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.UnknownHostException;
@@ -25,8 +23,9 @@ import javafx.scene.layout.StackPane;
 import javafx.stage.Stage;
 
 /**
- * Client mit GUI als Front End zur Nutzung eines Servers zum Schreiben/Abrufen 
+ * Client mit GUI als Front End zur Nutzung eines Servers zum Schreiben/Abrufen
  * von Nachrichten unter Nutzung von Java RMI
+ *
  * @author Nils Eggebrecht
  * @author Lennart Hartmann
  * @version 06.10.2017
@@ -35,55 +34,62 @@ public class Client extends Application {
 
     static MessageService server;
     static Registry registry;
-    public static int MAX_FAILIURE_TIME = 10000;
+    public static int MAX_FAILIURE_TIME = 5000;
     private int failiureTime = 0;
     private String CLIENT_ID;
 
     String currentMsg;
-    Stub stub = new Stub();
+    //Stub stub = new Stub();
     Button receiveBtn = new Button("receive next message");
     Button sendBtn = new Button("send Message");
     Button connectBtn = new Button("connect");
     Button showAllBtn = new Button("show all");
 
-    public Client() throws UnknownHostException{
-        CLIENT_ID=InetAddress.getLocalHost().toString();
-        CLIENT_ID=CLIENT_ID.split("/")[1];
-        System.out.println("Client created: "+this);
+    public Client() throws UnknownHostException {
+        CLIENT_ID = InetAddress.getLocalHost().toString();
+        CLIENT_ID = CLIENT_ID.split("/")[1];
+        System.out.println("Client created: " + this);
     }
-    
 
     /**
-     * Verschickt eine neue Nachricht an einen Message Client mit 
-     * at-least-once-Semantik durch periodische Wiederholung 
-     * im Fehlerfall
-     * @return 
+     * Verschickt eine neue Nachricht an einen Message Client mit
+     * at-least-once-Semantik durch periodische Wiederholung im Fehlerfall
+     *
+     * @return
      */
-    private void sendMsg() {
+    private synchronized void sendMsg() {
         System.out.println(currentMsg);
 
-        try {
-            server.newMessage(this.toString(), currentMsg);
-            failiureTime = 0;
-
-        } catch (RemoteException ex) {
-            Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
-            if (failiureTime < MAX_FAILIURE_TIME) {
-                sendMsg();
-            }
+        boolean exceptionPending = true;
+        failiureTime = 0;
+        while (exceptionPending && failiureTime < MAX_FAILIURE_TIME) {
             try {
-                this.wait(500);
-            } catch (InterruptedException ex1) {
-                Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex1);
-                failiureTime += 500;
+                server.newMessage(this.toString(), currentMsg);
+                exceptionPending = false;
+
+            } catch (RemoteException ex) {
+                Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
+                exceptionPending = true;
+                try {
+                    this.wait(500);
+                    failiureTime += 500;
+                } catch (InterruptedException ex1) {
+                    Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex1);
+
+                }
             }
+
         }
+        if (exceptionPending == true) {
+            System.out.println("Connection lost, please try to connect again!");
+        }
+
     }
 
- 
     /**
      * Erzeugt die Grafische Oberflaeche
-     * @param primaryStage  GUI Einstieg
+     *
+     * @param primaryStage GUI Einstieg
      */
     @Override
     public void start(Stage primaryStage) {
@@ -109,7 +115,7 @@ public class Client extends Application {
         final TextField serverField = new TextField();
         serverField.setPrefColumnCount(15);
         serverField.setPromptText("Enter the desired Server");
-        
+
         //Zuordnung der Buttons
         GridPane.setConstraints(serverField, 0, 2);
         grid.getChildren().add(serverField);
@@ -123,31 +129,31 @@ public class Client extends Application {
         grid.getChildren().add(showAllBtn);
 
         /*
-        Definiert das Verhalten des Buttons zur Abholung der naechsten 
-        Nachricht
-        */
+         Definiert das Verhalten des Buttons zur Abholung der naechsten 
+         Nachricht
+         */
         receiveBtn.setOnAction(e -> {
             System.out.println(this);
             try {
                 nextMsgField.setText(server.nextMessage(this.toString()));
-          
+
             } catch (RemoteException ex) {
                 Logger.getLogger(Client.class.getName()).log(Level.SEVERE, null, ex);
             }
         });
 
         /*
-        Definiert das Verhalten des Buttons zum senden einer neuen Nachricht
-        */
+         Definiert das Verhalten des Buttons zum senden einer neuen Nachricht
+         */
         sendBtn.setOnAction(e -> {
             currentMsg = newMsgField.getText();
             sendMsg();
         });
-        
+
         /* 
-        Definiert das Verhalten des Buttons zum (neu-)verbinden mit einem
-        Server 
-        */
+         Definiert das Verhalten des Buttons zum (neu-)verbinden mit einem
+         Server 
+         */
         connectBtn.setOnAction(e -> {
             String servChoice = serverField.getText();
             if (servChoice.length() == 0) {
@@ -159,8 +165,8 @@ public class Client extends Application {
         });
 
         /*
-        Definiert das Verhalten des Buttons zur Ausgabe aller Nachrichten
-        auf der Konsole
+         Definiert das Verhalten des Buttons zur Ausgabe aller Nachrichten
+         auf der Konsole
          */
         showAllBtn.setOnAction(e -> {
             try {
@@ -180,11 +186,12 @@ public class Client extends Application {
         primaryStage.setScene(scene);
         primaryStage.show();
     }
-   
+
     /**
      * Verbindet den Client mit ein neuen Server
+     *
      * @param servStr Der Server der nun geneutzt werden soll
-     */  
+     */
     public static void reconnect(String servStr) {
         try {
             server = (MessageService) Naming.lookup(servStr);
@@ -198,12 +205,12 @@ public class Client extends Application {
     }
 
     /**
-     * Verbindet lokal mit dem Default-Server 
+     * Verbindet lokal mit dem Default-Server
      */
     public static void reconnect() {
         reconnect("//127.0.0.1:1099/MessageService");
     }
-    
+
     @Override
     public String toString() {
         return this.CLIENT_ID;
@@ -214,6 +221,7 @@ public class Client extends Application {
         System.out.println("Client:connected");
         Application.launch(args);
     }
+
     /**
      * Nur zu Testzwecken
      */
