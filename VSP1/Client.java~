@@ -201,7 +201,7 @@ public class Client extends Application {
      * Verbindet lokal mit dem Default-Server 
      */
     public static void reconnect() {
-        reconnect("//127.0.0.1:1099/MessageService");
+        reconnect("//127.0.0.1:1099/Server");
     }
     
     @Override
