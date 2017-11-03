@@ -12,12 +12,13 @@ using namespace boost::multiprecision::literals;
 
 struct numberToSplit
 {
-    int512_t N;
-    int512_t p;
+    int512_t N = 0;
+    int512_t p = 0;
     bool isprim = false;
+    int512_t numpPRohPerWorker = 0;
 };
 
-int512_t PollardRho(int512_t N);
+numberToSplit PollardRho(int512_t N);
 inline bool IsPrime( int512_t number );
 int512_t power(int512_t a, int512_t n, int512_t mod);
 int512_t modular_pow(int512_t base, int512_t exponent, int512_t modulus);
@@ -30,6 +31,8 @@ numberToSplit worker(int512_t N);
 set<int512_t> setOfPrimFactors;
 set<int512_t> setOfFactors;
 int512_t errorCode = -99;
+static int numPRoh = 0;
+
 
 
 int512_t Z1 = 8806715679; // 3 * 29 * 29 * 71 * 211 * 233
@@ -49,17 +52,26 @@ Z4 = 100060210614380659647872297427366695090390611213179474545733865926684244698
 
 
 /* method to return prime divisor for N */
-int512_t PollardRho(int512_t N)
+numberToSplit PollardRho(int512_t N)
 {
     /* initialize random seed */
     srand (time(NULL));
+    struct numberToSplit num;
+    num.N = N;
 
     /* no prime divisor for 1 */
-    if (N==1) return N;
+    if (N==1)
+    {
+        num.p = 1;
+        return num;
+    }
 
     /* even number means one of the divisors is 2 */
-    if (N % 2 == 0) return 2;
-
+    if (N % 2 == 0)
+    {
+        num.p = 2;
+        return num;
+    }
     /* we will pick from the range [1, N) */
     int512_t x = (rand()% N + 1);
 
@@ -83,18 +95,21 @@ int512_t PollardRho(int512_t N)
     int512_t M = (int512_t) sqrt(sqrt(N));
     M = (int512_t) (M * 118);
     M = (int512_t) (M / 100);
-    cout << "M = (int512_t) 1.18 * sqrt(sqrt(N)): " << M << endl;
+
+
     do
     {
 
         if (numberOfRuns >  M)
         {
-            cout << "Stop and start again" << endl;
+            cout << "Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)):" << M << endl;
             return PollardRho(N);
         }
-        if (checkMailboxValue == 2000)
+        if (checkMailboxValue == 50000)
         {
+
             //checkmailbox;
+
         }
         /* Tortoise Move: x= (x² + a) mod N */
         x = (x * x + a) % N;
@@ -115,6 +130,7 @@ int512_t PollardRho(int512_t N)
         }
         checkMailboxValue++;
         numberOfRuns++;
+        numPRoh++;
     }
     while (p == 1);
     cout << "wie lange dauert das berechnen einer zahl: " << checkMailboxValue << endl;
@@ -124,12 +140,17 @@ int512_t PollardRho(int512_t N)
      * with chosen x and a */
     if (p!=N)
     {
-        return p;
+        struct numberToSplit num;
+        num.N = N;
+        num.p = p;
+        num.numpPRohPerWorker = numPRoh;
+        return num;
     }
     else
     {
+        num.p = errorCode;
         //error code
-        return errorCode;
+        return num;
     }
 }
 
@@ -247,22 +268,18 @@ double get_cpu_time()
 }
 
 
-
-
-
 numberToSplit worker(int512_t N)
 {
     struct numberToSplit num;
-    num.N = N;
-    num.p = PollardRho(num.N);
+
+    num = PollardRho(N);
 
     if(num.p == errorCode)
     {
-        num.p = PollardRho(num.N);
+        num = PollardRho(N);
     }
     else
     {
-
         //TODO: worker nachdem er num.p für num.N berechnet hat
         if(IsPrime(num.p))
         {
@@ -278,128 +295,128 @@ numberToSplit worker(int512_t N)
 
     }
 }
-    /* Koordinator */
-    int main()
-    {
+/* Koordinator */
+int main()
+{
 
-        struct numberToSplit num;
-        int512_t N = Z3;
+    struct numberToSplit num;
+    int512_t N = Z3;
 
 //    cout << "Z1: " << Z1 << endl;
 //    cout << "Z2: " << Z2 << endl;
 //    cout << "Z3: " << Z3 << endl;
 //    cout << "Z4: " << Z4 << endl;
-        cout << "N: " << N << endl;
+    cout << "N: " << N << endl;
 
 //  Start Timers
-        double wallStartTime = get_wall_time();
-        double cpuStartTime  = get_cpu_time();
+    double wallStartTime = get_wall_time();
+    double cpuStartTime  = get_cpu_time();
 
-        num.N = N;
+    num.N = N;
 
-        if(IsPrime(num.N) || num.N == 1)
+    if(IsPrime(num.N) || num.N == 1)
+    {
+        cout << N << " is a prime" << endl;
+        return 0;
+    }
+
+    setOfFactors.insert(N);
+
+    //while(N != 1 || !setOfFactors.empty())
+    while(!setOfFactors.empty())
+    {
+        set<int512_t>::iterator iter = setOfFactors.begin();
+        set<int512_t>::iterator iterend = setOfFactors.end();
+
+        //TODO: Manager.size() nutzen nicht int anzahlManager nutzen
+        int anzahlManager = 1;
+
+        // weniger Manager als Faktoren
+        if (anzahlManager <= setOfFactors.size())
         {
-            cout << N << " is a prime" << endl;
-            return 0;
-        }
-
-        setOfFactors.insert(N);
-
-        //while(N != 1 || !setOfFactors.empty())
-        while(!setOfFactors.empty())
-        {
-            set<int512_t>::iterator iter = setOfFactors.begin();
-            set<int512_t>::iterator iterend = setOfFactors.end();
-
-            //TODO: Manager.size() nutzen nicht int anzahlManager nutzen
-            int anzahlManager = 1;
-
-            // weniger Manager als Faktoren
-            if (anzahlManager <= setOfFactors.size())
+            // jeder manager bekommt einen andern Faktor
+            for (int i = 0; i < anzahlManager; i++)
             {
-                // jeder manager bekommt einen andern Faktor
-                for (int i = 0; i < anzahlManager; i++)
+                //TODO: *iter an Manager[i] senden
+                num = worker(*iter);
+                ++iter;
+            }
+        }
+        // mehr Manager als Faktoren
+        else
+        {
+            // der reihe nach wird jeder faktor verteilt, wenn keine Faktoren mehr da sind beginnt er von vorn
+            for (int i = 1; i <= anzahlManager; i++)
+            {
+                //TODO: *iter an Manager[i] senden
+//                cout << "i: " << i << endl;
+//                cout << "p = PollardRho(*iter); " << *iter << endl;
+                num = worker(*iter);
+
+                if(i % setOfFactors.size() == 0)
                 {
-                    //TODO: *iter an Manager[i] senden
-                    num = worker(*iter);
+                    iter= setOfFactors.begin();
+                }
+                else
+                {
                     ++iter;
                 }
             }
-            // mehr Manager als Faktoren
-            else
-            {
-                // der reihe nach wird jeder faktor verteilt, wenn keine Faktoren mehr da sind beginnt er von vorn
-                for (int i = 1; i <= anzahlManager; i++)
-                {
-                    //TODO: *iter an Manager[i] senden
-//                cout << "i: " << i << endl;
-//                cout << "p = PollardRho(*iter); " << *iter << endl;
-                    num = worker(*iter);
-
-                    if(i % setOfFactors.size() == 0)
-                    {
-                        iter= setOfFactors.begin();
-                    }
-                    else
-                    {
-                        ++iter;
-                    }
-                }
-            }
+        }
 
 
 
 
 
 
-            //todo: Koordinator
-            // num.N aus den Faktoren Löschen
+        //todo: Koordinator
+        // num.N aus den Faktoren Löschen
 
 
-            //wenn num.p is prim insert in Primzahlen
-            if(num.isprim == true)
-            {
-                setOfPrimFactors.insert(num.p);
+        //wenn num.p is prim insert in Primzahlen
+        if(num.isprim == true)
+        {
+            setOfPrimFactors.insert(num.p);
 //                cout << " Neue Primzahl gefunden: The Primfactors are: ";
 //                printSet(setOfPrimFactors);
-                cout << " Found new Primfaktor: The new Primfaktor is: " << num.p << endl;
-            }
-
-            //wenn nicht dann insert p in Faktoren
-            else
-            {
-                setOfFactors.insert(num.p);
-            }
-
-            // für jede zahl in Fakroten:
-            set<int512_t>::iterator it;
-
-            // für alle fakroten testen ob sie durch die gefundene Primzahl teilbar sind
-
-            for(it=setOfFactors.begin(); it!=setOfFactors.end(); ++it)
-            {
-                int512_t zwischenspeicher = *it;
-
-                // dividiere durch num.p bis != 0
-                while (zwischenspeicher % num.p == 0)
-                {
-                    zwischenspeicher/= num.p;
-                }
-                // insert das neue N
-
-                bool zwiIsprime = IsPrime(zwischenspeicher);
-                if(zwischenspeicher > 1 && !zwiIsprime)
-                {
-                    setOfFactors.insert(zwischenspeicher);
-                }
-                else if(zwischenspeicher > 1 && zwiIsprime)
-                {
-                    setOfPrimFactors.insert(zwischenspeicher);
-                    cout << " Found new Primfaktor: The new Primfaktor is: " << zwischenspeicher << endl;
-                }
-            }
-            setOfFactors.erase(num.N);
+            cout << "\tFound new Primfaktor: The new Primfaktor is: " << num.p << endl;
         }
+
+        //wenn nicht dann insert p in Faktoren
+        else
+        {
+            setOfFactors.insert(num.p);
+        }
+
+        // für jede zahl in Fakroten:
+        set<int512_t>::iterator it;
+
+        // für alle fakroten testen ob sie durch die gefundene Primzahl teilbar sind
+
+        for(it=setOfFactors.begin(); it!=setOfFactors.end(); ++it)
+        {
+            int512_t zwischenspeicher = *it;
+
+            // dividiere durch num.p bis != 0
+            while (zwischenspeicher % num.p == 0)
+            {
+                zwischenspeicher/= num.p;
+            }
+            // insert das neue N
+
+            bool zwiIsprime = IsPrime(zwischenspeicher);
+            if(zwischenspeicher > 1 && !zwiIsprime)
+            {
+                setOfFactors.insert(zwischenspeicher);
+            }
+            else if(zwischenspeicher > 1 && zwiIsprime)
+            {
+                setOfPrimFactors.insert(zwischenspeicher);
+                cout << "\tFound new Primfaktor: The new Primfaktor is: " << zwischenspeicher << endl;
+            }
+        }
+        setOfFactors.erase(num.N);
+    }
 
 
 
@@ -407,8 +424,11 @@ numberToSplit worker(int512_t N)
     double wallEndTime = get_wall_time();
     double cpuEndTime  = get_cpu_time();
 
+    //TODO: anzahlworker ersetzen
+    int numOfWorker = 1;
+    cout << "Number of Runs: " << num.numpPRohPerWorker * numOfWorker << endl;
     cout << "Wall Time = " << wallEndTime - wallStartTime << endl;
-    cout << "CPU Time  = " << cpuEndTime  - cpuStartTime  << endl;
+    cout << "CPU Time  = " << (cpuEndTime  - cpuStartTime) * numOfWorker  << endl;
     // Print setOfPrimFactors
     cout << "N: " << N << endl;
     cout << "The Primfactors for N are: ";
