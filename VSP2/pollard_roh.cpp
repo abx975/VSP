@@ -252,13 +252,12 @@ int main()
 
     //int512_t N = 210;
 
-
     int512_t N = Z3;
 
-    cout << "Z1: " << Z1 << endl;
-    cout << "Z2: " << Z2 << endl;
-    cout << "Z3: " << Z3 << endl;
-    cout << "Z4: " << Z4 << endl;
+//    cout << "Z1: " << Z1 << endl;
+//    cout << "Z2: " << Z2 << endl;
+//    cout << "Z3: " << Z3 << endl;
+//    cout << "Z4: " << Z4 << endl;
     cout << "N: " << N << endl;
 
 
@@ -270,8 +269,9 @@ int main()
     struct numberToSplit num;
     num.N = N;
 
-    if(IsPrime(num.N))
+    if(IsPrime(num.N) || num.N == 1)
     {
+        cout << N << " is a prime" << endl;
         return 0;
     }
 
