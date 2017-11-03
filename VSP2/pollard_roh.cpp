@@ -2,6 +2,8 @@
    Pollard's Rho algorithm */
 #include<bits/stdc++.h>
 #include <boost/multiprecision/cpp_int.hpp>
+#include <time.h>
+#include <sys/time.h>
 
 
 using namespace std;
@@ -13,6 +15,8 @@ inline bool IsPrime( int512_t number );
 int512_t power(int512_t a, int512_t n, int512_t mod);
 int512_t modular_pow(int512_t base, int512_t exponent, int512_t modulus);
 void printSet(set<int512_t> setToPrint);
+double get_wall_time();
+double get_cpu_time();
 
 
 set<int512_t> setOfPrimFactors;
@@ -105,7 +109,7 @@ int512_t PollardRho(int512_t N)
         numberOfRuns++;
     }
     while (p == 1);
-    cout << "wielange dauert das berechnen einer zahl: " << checkMailboxValue << endl;
+    cout << "wie lange dauert das berechnen einer zahl: " << checkMailboxValue << endl;
 
 
     /* retry if the algorithm fails to find prime factor
@@ -220,6 +224,21 @@ void printSet(set<int512_t> setToPrint)
 
 }
 
+
+double get_wall_time(){
+    struct timeval time;
+    if (gettimeofday(&time,NULL)){
+        //  Handle error
+        return 0;
+    }
+    return (double)time.tv_sec + (double)time.tv_usec * .000001;
+}
+double get_cpu_time(){
+    return (double)clock() / CLOCKS_PER_SEC;
+}
+
+
+
 struct numberToSplit
 {
     int512_t N;
@@ -234,7 +253,7 @@ int main()
     //int512_t N = 210;
 
 
-    int512_t N = Z4;
+    int512_t N = Z3;
 
     cout << "Z1: " << Z1 << endl;
     cout << "Z2: " << Z2 << endl;
@@ -243,7 +262,9 @@ int main()
     cout << "N: " << N << endl;
 
 
-
+//  Start Timers
+    double wall0 = get_wall_time();
+    double cpu0  = get_cpu_time();
 
 
     struct numberToSplit num;
@@ -375,6 +396,13 @@ int main()
         }
     }
 
+
+    //  Stop timers
+    double wall1 = get_wall_time();
+    double cpu1  = get_cpu_time();
+
+    cout << "Wall Time = " << wall1 - wall0 << endl;
+    cout << "CPU Time  = " << cpu1  - cpu0  << endl;
     // Print setOfPrimFactors
     cout << "N: " << N << endl;
     cout << "The Primfactors for N are: ";
