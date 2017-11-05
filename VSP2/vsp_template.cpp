@@ -1,6 +1,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
+#include <algorithm>
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
 
@@ -14,6 +15,7 @@ using std::vector;
 using std::cout;
 using std::cerr;
 using std::endl;
+using std::cin;
 using namespace caf;
 
 //persistent memory for manangers
@@ -24,8 +26,15 @@ struct state {
 
 //behavior of workers
 behavior workerBeh(event_based_actor* self) {
+ 
   return {
-    [](int N) {
+    [=](int N) {
+      aout(self) << "worker erreicht" <<endl;
+      self->quit(sec::invalid_argument);
+      if( !self->mailbox().empty() ){ 
+        cerr << "worker got a new job";  
+        self->quit(sec::request_receiver_down);  
+      }
       return N/2;
     }
   };
@@ -35,8 +44,19 @@ behavior workerBeh(event_based_actor* self) {
 behavior managerBeh(stateful_actor<state>* self, int noOfWorkers) {
   //initialisation  
   for (auto i = 0; i < noOfWorkers; ++i){
-    self->state.workers.emplace_back(self->spawn(workerBeh));
+    auto worker=self->spawn(workerBeh);
+    self->monitor(worker);
+    self->state.workers.emplace_back(worker);
   }
+  
+  self->set_down_handler([=](const down_msg& dm) {
+    cout << "<<<restart terminated worker>>>\n";
+    self->state.workers.erase(std::remove(self->state.workers.begin(), 
+      self->state.workers.end(), dm.source), self->state.workers.end());
+    // <monitored> is a shortcut for calling monitor() afterwards
+    self->state.workers.emplace_back( self->spawn<monitored>(workerBeh));  
+  });
+
   //actual bahaviour
   return {
     [=](int N) {      
@@ -54,7 +74,7 @@ behavior managerBeh(stateful_actor<state>* self, int noOfWorkers) {
 void caf_main(actor_system& sys) {
   auto& mm = sys.middleman();
 
-#if IS_SERVER==true
+#if IS_SERVER
   //server-actor                
   actor manager = sys.spawn(managerBeh,NR_OF_WORKERS);
 
@@ -67,7 +87,7 @@ void caf_main(actor_system& sys) {
   }
 #endif
 
-#if IS_CLIENT==true
+#if IS_CLIENT
   // scoped actor for ad hoc communication
   scoped_actor self{sys};
   
@@ -83,11 +103,13 @@ void caf_main(actor_system& sys) {
   }
 
 ////////////////// coordinator behaviour ///////////////////////
-
-  static int n=16;
+  cout << "Primfaktorberechnung\nZu faktorisierende Zahl: " << endl;
+  int n;
+  cin >> n;
+  //static int n=16;
   cout << "launching coordinator" << endl;
   //superloop  
-  while(n>0){
+  while(n>0){ 
     for(auto& manager : managers){
       self->request(manager, infinite, n).receive(
         [&](int p) {
