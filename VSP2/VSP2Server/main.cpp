@@ -318,7 +318,7 @@ behavior workerBeh(event_based_actor* self) {
        struct numberToSplit num;
 
     num = PollardRho(N);
-    
+
     if(num.p == errorCode)
     {
         num = PollardRho(N);
@@ -336,7 +336,7 @@ behavior workerBeh(event_based_actor* self) {
         }
 
         cerr << "worker läuft durch; num.N: " << num.N <<" num.p: "<< num.p <<   endl;
-        
+
         return num;
 
     }
@@ -353,7 +353,7 @@ behavior managerBeh(stateful_actor<state>* self,int n) {
   return {
     //[=](add_atom a, int x, int y) {
     [=](int512_t N) {
-      
+
       aout(self) << "manager erreicht" <<endl;
       int i=0;
       for(auto& worker: self->state.workers){
@@ -361,13 +361,13 @@ behavior managerBeh(stateful_actor<state>* self,int n) {
         cout << "sende " << N <<" an worker " << i << endl;
 
         i++;
-      } 
+      }
     }
   };
 }
 
 
-void coordBeh(event_based_actor* self, std::vector<actor> managers) {  
+void coordBeh(event_based_actor* self, std::vector<actor> managers) {
  static struct numberToSplit num;
 int512_t N = Z0;
 
@@ -409,9 +409,9 @@ int512_t N = Z0;
             //TODO: *iter an Manager[i] senden
 //                cout << "i: " << i << endl;
 //                cout << "p = PollardRho(*iter); " << *iter << endl;
-            
-//////////////////// request/receive /////////////////////////////////////////////////////            
-            
+
+//////////////////// request/receive /////////////////////////////////////////////////////
+
    //         num = worker(*iter);
      self->request(manager,infinite,*iter).then(   ///  numberToSplit = manager(N);
         [=](numberToSplit nts) {
@@ -430,7 +430,7 @@ int512_t N = Z0;
          cerr << "got num; num.N: " << num.N <<" num.p: "<< num.p << endl;
 
 
-////////////////////////////////////////////////////////////////////////////////////////            
+////////////////////////////////////////////////////////////////////////////////////////
             cout << "i % setOfFactors.size() == 0; i= "  << i << "setOfFactors.size(): " << setOfFactors.size() << endl;
             if(i % setOfFactors.size() == 0)
             {
@@ -525,15 +525,15 @@ void caf_main(actor_system& sys, const config& cfg) {
     }else {
       std::vector<actor> managers;
       managers.emplace_back(*x);
-      auto coordinator = sys.spawn(coordBeh, managers); 
+      auto coordinator = sys.spawn(coordBeh, managers);
     }
-  }      
+  }
 }
 
 
 CAF_MAIN(io::middleman)
-    
-    
+
+
 
 
 

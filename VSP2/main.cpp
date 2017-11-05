@@ -1,27 +1,38 @@
 #include <string>
 #include <iostream>
-#include <stdexcept>
 #include <vector>
-
 #include "caf/all.hpp"
 #include "caf/io/all.hpp"
-#include<bits/stdc++.h>
+#include <bits/stdc++.h>
 #include <boost/multiprecision/cpp_int.hpp>
 #include <time.h>
 #include <sys/time.h>
 #include "int512_serialization.hpp"
 
+#define NR_OF_WORKERS 4
+#define IP "localhost"
+#define PORT 9900
+#define IS_SERVER true
+#define IS_CLIENT true
 
-using std::cout;
-using std::endl;
-using std::cerr;
-using std::endl;
 using namespace caf;
 using namespace std;
 using namespace boost::multiprecision;
 using namespace boost::multiprecision::literals;
 
-//using add_atom = atom_constant<atom("add")>;
+
+using std::vector;
+using std::cerr;
+using std::cerr;
+using std::endl;
+using namespace caf;
+
+//persistent memory for manangers
+struct state
+{
+    actor worker;
+    std::vector<actor> workers;
+};
 
 struct numberToSplit
 {
@@ -34,32 +45,10 @@ struct numberToSplit
 };
 
 template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, numberToSplit& p) {
-  return f(meta::type_name("numberToSplit"), p.N, p.p, p.isprim, p.numpPRohPerWorker, p.wallStartTime, p.cpuStartTime);
+typename Inspector::result_type inspect(Inspector& f, numberToSplit& p)
+{
+    return f(meta::type_name("numberToSplit"), p.N, p.p, p.isprim, p.numpPRohPerWorker, p.wallStartTime, p.cpuStartTime);
 }
-
-struct config : actor_system_config {
-  std::string host = "localhost";
-  uint16_t port = 9900;
-  size_t num_workers = 1;
-  bool server = false;
-  config() {
-    add_message_type<int512_t>("int512_t");
-    add_message_type<numberToSplit>("numberToSplit");
-    opt_group{custom_options_, "global"}
-    .add(host, "host,H", "hostname of server")
-    .add(port, "port,p", "IP port for publish/remote_actor")
-    .add(num_workers, "num-workers,w", "number of workers (in manager mode)")
-    .add(server, "server,s", "run as server");
-    //.add_message_type<numberToSplit>("numberToSplit");
-  }
-};
-
-struct state {
-  actor worker;
-  std::vector<actor> workers;
-};
-
 
 numberToSplit PollardRho(int512_t N);
 inline bool IsPrime( int512_t number );
@@ -97,7 +86,12 @@ Z4 = 100060210614380659647872297427366695090390611213179474545733865926684244698
 numberToSplit PollardRho(int512_t N)
 {
     /* initialize random seed */
-    srand (time(NULL));
+    timeval start;
+    int useconds;
+    gettimeofday(&start, NULL);
+    useconds = start.tv_usec;
+    srand(useconds);
+    //srand (time(NULL));
     struct numberToSplit num;
     num.N = N;
 
@@ -138,13 +132,12 @@ numberToSplit PollardRho(int512_t N)
     M = (int512_t) (M * 118);
     M = (int512_t) (M / 100);
 
-
     do
     {
-
+    // If Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)): start with a new random number
         if (numberOfRuns >  M)
         {
-            cout << "Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)):" << M << endl;
+            cerr << "Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)):" << M << endl;
             return PollardRho(N);
         }
         if (checkMailboxValue == 50000)
@@ -153,6 +146,7 @@ numberToSplit PollardRho(int512_t N)
             //checkmailbox;
 
         }
+
         /* Tortoise Move: x= (x² + a) mod N */
         x = (x * x + a) % N;
 
@@ -175,8 +169,6 @@ numberToSplit PollardRho(int512_t N)
         numPRoh++;
     }
     while (p == 1);
-    cout << "wie lange dauert das berechnen einer zahl: " << checkMailboxValue << endl;
-
 
     /* retry if the algorithm fails to find prime factor
      * with chosen x and a */
@@ -191,14 +183,12 @@ numberToSplit PollardRho(int512_t N)
     else
     {
         num.p = errorCode;
-        //error code
         return num;
     }
 }
 
 
 // Check Prime
-///////////////////////
 int512_t power(int512_t a, int512_t n, int512_t mod)
 {
     int512_t power = a,result=1;
@@ -265,17 +255,7 @@ inline bool IsPrime( int512_t number )
     if(witness(7,number)) return false;
     if(witness(61,number)) return false;
     return true;
-
-    /*WARNING: Algorithm deterministic only for numbers < 4,759,123,141 (unsigned int's max is 4294967296)
-      if n < 1,373,653, it is enough to test a = 2 and 3.
-      if n < 9,080,191, it is enough to test a = 31 and 73.
-      if n < 4,759,123,141, it is enough to test a = 2, 7, and 61.
-      if n < 2,152,302,898,747, it is enough to test a = 2, 3, 5, 7, and 11.
-      if n < 3,474,749,660,383, it is enough to test a = 2, 3, 5, 7, 11, and 13.
-      if n < 341,550,071,728,321, it is enough to test a = 2, 3, 5, 7, 11, 13, and 17.*/
 }
-
-/////////////////////////
 
 void printSet(set<int512_t> setToPrint)
 {
@@ -284,13 +264,13 @@ void printSet(set<int512_t> setToPrint)
         set<int512_t>::iterator iter;
         for(iter=setToPrint.begin(); iter!=setToPrint.end(); ++iter)
         {
-            cout << *iter << " " ;
+            cerr << *iter << " " ;
         }
-        cout << endl;
+        cerr << endl;
     }
     else
     {
-        cout << "The Set is empty" << endl;
+        cerr << "The Set is empty" << endl;
     }
 }
 
@@ -309,158 +289,168 @@ double get_cpu_time()
     return (double)clock() / CLOCKS_PER_SEC;
 }
 
-
-//Verhalten der Worker
-behavior workerBeh(event_based_actor* self) {
-  return {
-      [=](int512_t N) -> numberToSplit {
-      aout(self) << "worker erreicht" <<endl;
-       struct numberToSplit num;
-
-    num = PollardRho(N);
-
-    if(num.p == errorCode)
+//behavior of workers
+behavior workerBeh(event_based_actor* self)
+{
+    return
     {
-        num = PollardRho(N);
-    }
-    else
-    {
-        //TODO: worker nachdem er num.p für num.N berechnet hat
-        if(IsPrime(num.p))
-        {
-            num.isprim = true;
-        }
-        else
-        {
-            num.isprim = false;
-        }
+        [=](int512_t N) -> numberToSplit {
+            cerr << "worker erreicht" <<endl;
+            struct numberToSplit num;
 
-        cout << "worker läuft durch "<< num.N <<" "<< num.p <<   endl;
-        return num;
-
-    }
-    }
-  };
-}
-
-//Verhalten der Manager
-behavior managerBeh(stateful_actor<state>* self,int n) {
-  //self->state.worker = self->spawn(workerBeh);
-  for (auto i = 0; i < n; ++i){
-    self->state.workers.emplace_back(self->spawn(workerBeh));
-  }
-  return {
-    //[=](add_atom a, int x, int y) {
-    [=](int512_t N) {
-      
-      aout(self) << "manager erreicht" <<endl;
-      int i=0;
-      for(auto& worker: self->state.workers){
-        self->delegate(worker, N);
-        aout(self) << "sende an worker " << i << endl;
-        i++;
-      } 
-    }
-  };
-}
-
-
-void coordBeh(event_based_actor* self, std::vector<actor> managers) {  
-    struct numberToSplit num;
-    int512_t N = Z0;
-    num.N = N;
-    cout << "N: " << N << endl;
-    
-    if(IsPrime(num.N) || num.N == 1)
-    {
-        cout << num.N << " is a prime" << endl;
-        // EXIT
-    }
- 
-    setOfFactors.insert(N);
-    
-
-
-//  Start Timers
-//    num.wallStartTime = get_wall_time();
-//    num.cpuStartTime  = get_cpu_time();
-    
-    for(auto& manager : managers){
-        self->send(manager,N);
-    }
-  
-   ///////////////////////////////////////////////////////////////////////////////////// 
-    
-    
-    
-    
-    
-   ///////////////////////////////////////////////////////////////////////////////////// 
-    
-    
-    
-  self->become (
-    [](numberToSplit num){
-      cout << "Koordinator erhält: " << num.p << std::endl;
-      if(!setOfFactors.empty()){
-      
-           set<int512_t>::iterator iter = setOfFactors.begin();
-        set<int512_t>::iterator iterend = setOfFactors.end();
-
-          
-     /*  JEDER  Manager bekommt erstmal die gleiche Zahl zum zerteilen TODO:
-        //TODO: Manager.size() nutzen nicht int anzahlManager nutzen
-        int anzahlManager = managers.size();
-
-        // weniger Manager als Faktoren
-        if (anzahlManager <= setOfFactors.size())
-        {
-            // jeder manager bekommt einen andern Faktor
-            for (int i = 0; i < anzahlManager; i++)
+            num = PollardRho(N);
+            if(num.p == errorCode)
             {
-                //TODO: *iter an Manager[i] senden
-                num = worker(*iter);
-                ++iter;
+                num = PollardRho(N);
             }
-        }
-        
-        
-        // mehr Manager als Faktoren
-        else
-        {
-            // der reihe nach wird jeder faktor verteilt, wenn keine Faktoren mehr da sind beginnt er von vorn
-            for (int i = 1; i <= anzahlManager; i++)
+            else
             {
-                //TODO: *iter an Manager[i] senden
-//                cout << "i: " << i << endl;
-//                cout << "p = PollardRho(*iter); " << *iter << endl;
-                //num = worker(*iter);
-
-                if(i % setOfFactors.size() == 0)
+                //TODO: worker nachdem er num.p für num.N berechnet hat
+                if(IsPrime(num.p))
                 {
-                    iter= setOfFactors.begin();
+                    num.isprim = true;
                 }
                 else
                 {
-                    ++iter;
+                    num.isprim = false;
                 }
+
+                cerr << "worker " << self->address().id() <<  " läuft durch; num.N: " << num.N <<" num.p: "<< num.p <<   endl;
+
+                return num;
             }
         }
-*/
+    };
+}
+
+//behaviour of managers
+behavior managerBeh(stateful_actor<state>* self, int noOfWorkers)
+{
+    //initialisation
+    for (auto i = 0; i < noOfWorkers; ++i)
+    {
+        self->state.workers.emplace_back(self->spawn(workerBeh));
+    }
+    //actual bahaviour
+    return
+    {
+        [=](int512_t N)
+        {
+            cerr << "manager erreicht" <<endl;
+            int i=0;
+            for(auto& worker: self->state.workers)
+            {
+                self->delegate(worker, N);
+                cerr << "sende " << N <<" an worker " << i << endl;
+                i++;
+            }
+        }
+    };
+}
+
+void caf_main(actor_system& sys)
+{
+    auto& mm = sys.middleman();
+
+#if IS_SERVER==true
+    //server-actor
+    actor manager = sys.spawn(managerBeh,NR_OF_WORKERS);
+
+    //publish manager
+    auto p = mm.publish(manager, PORT);
+    if (!p)
+    {
+        cerr << "unable to publish actor: " << sys.render(p.error()) << "\n";
+    }
+    else
+    {
+        cerr << "math actor published at port " << *p << "\n";
+    }
+#endif
+
+#if IS_CLIENT==true
+    // scoped actor for ad hoc communication
+    scoped_actor self{sys};
+
+    //managers for coordinator to address
+    std::vector<actor> managers;
+
+    //lookup managers
+    auto remotePtr = mm.remote_actor(IP, PORT);
+    if (!remotePtr)
+    {
+        cerr << "unable to connect to server: " << sys.render(remotePtr.error()) << "\n";
+    }
+    else
+    {
+        managers.emplace_back(*remotePtr);
+    }
+
+////////////////// coordinator behaviour ///////////////////////
+
+    cerr << "launching coordinator" << endl;
+    static struct numberToSplit num;
+    int512_t N = Z4;
+
+//    cerr << "Z1: " << Z1 << endl;
+//    cerr << "Z2: " << Z2 << endl;
+//    cerr << "Z3: " << Z3 << endl;
+//    cerr << "Z4: " << Z4 << endl;
+    cerr << "N: " << N << endl;
+
+//  Start Timers
+    double wallStartTime = get_wall_time();
+    double cpuStartTime  = get_cpu_time();
+
+    num.N = N;
+
+    if(IsPrime(num.N) || num.N == 1)
+    {
+        cerr << N << " is a prime" << endl;
+        //todo: programm beenden
+        //return 0;
+    }
+
+    setOfFactors.insert(N);
+
+    //while(N != 1 || !setOfFactors.empty())
 
 
+    while(!setOfFactors.empty())
+    {
+        set<int512_t>::iterator iter = setOfFactors.begin();
+        set<int512_t>::iterator iterend = setOfFactors.end();
+        // der reihe nach wird jeder faktor verteilt, wenn keine Faktoren mehr da sind beginnt er von vorn
+        int i= 0;
+        for (auto manager: managers)
+        {
+            i++;
+            self->request(manager, infinite, *iter).receive(
+                [&](numberToSplit nts)
+            {
+                num = nts;
+            },
+            [&](error& err)
+            {
+                cerr << "Error: " << sys.render(err) << "\n";
+            });
 
-
-
-        //todo: Koordinator
-          
+            if(i % setOfFactors.size() == 0)
+            {
+                iter = setOfFactors.begin();
+            }
+            else
+            {
+                ++iter;
+            }
+        }
         //wenn num.p is prim insert in Primzahlen
         if(num.isprim == true)
         {
             setOfPrimFactors.insert(num.p);
-//                cout << " Neue Primzahl gefunden: The Primfactors are: ";
+//                cerr << " Neue Primzahl gefunden: The Primfactors are: ";
 //                printSet(setOfPrimFactors);
-            cout << "\tFound new Primfaktor: The new Primfaktor is: " << num.p << endl;
+            cerr << "Found new Primfaktor: The new Primfaktor is: " << num.p << endl;
         }
 
         //wenn nicht dann insert p in Faktoren
@@ -493,57 +483,28 @@ void coordBeh(event_based_actor* self, std::vector<actor> managers) {
             else if(zwischenspeicher > 1 && zwiIsprime)
             {
                 setOfPrimFactors.insert(zwischenspeicher);
-                cout << "\tFound new Primfaktor: The new Primfaktor is: " << zwischenspeicher << endl;
+                cerr << "Found new Primfaktor: The new Primfaktor is: " << zwischenspeicher << endl;
             }
         }
         setOfFactors.erase(num.N);
-          
-      }
-      else {
-       //  Stop timers
-  //  double wallEndTime = get_wall_time();
-  //  double cpuEndTime  = get_cpu_time();
+    }
+    //  Stop timers
+    double wallEndTime = get_wall_time();
+    double cpuEndTime  = get_cpu_time();
 
     //TODO: anzahlworker ersetzen
-    int numOfWorker = 1;
-    cout << "Number of Runs: " << num.numpPRohPerWorker * numOfWorker << endl;
-  //  cout << "Wall Time = " << wallEndTime - wallStartTime << endl;
-  //  cout << "CPU Time  = " << (cpuEndTime  - cpuStartTime) * numOfWorker  << endl;
+    cerr << "Number of Runs: " << num.numpPRohPerWorker * NR_OF_WORKERS << endl;
+    cerr << "Wall Time = " << wallEndTime - wallStartTime << endl;
+    cerr << "CPU Time  = " << (cpuEndTime  - cpuStartTime) * NR_OF_WORKERS  << endl;
+
     // Print setOfPrimFactors
-    cout << "N: " << num.N << endl;
-    cout << "The Primfactors for N are: ";
+    cerr << "N: " << N << endl;
+    cerr << "The Primfactors for N are: ";
     printSet(setOfPrimFactors);
-      }
-    }
-  );
+
+#endif
 }
 
-///////////////////////////////////////////////////////////////////////////////////
-//todo: if/else einkommentieren für Prozesse auf separaten Rechnern
-void caf_main(actor_system& sys, const config& cfg) {
-
-  auto& mm = sys.middleman();
- // if (cfg.server) {
-    auto p = mm.publish(sys.spawn(managerBeh,cfg.num_workers), cfg.port);
-    if (!p){
-      cerr << "unable to publish actor: " << sys.render(p.error()) << "\n";
-    }else{
-      cout << "math actor published at port " << *p << "\n";
-    }
-  //}else{
-    auto x = mm.remote_actor(cfg.host, cfg.port);
-    if (!x){
-      cerr << "unable to connect to server: " << sys.render(x.error()) << "\n";
-    }else {
-      std::vector<actor> managers;
-      managers.emplace_back(*x);
-      auto coordinator = sys.spawn(coordBeh, managers);
-      
-    }
- }
-
-
 CAF_MAIN(io::middleman)
-
 
 
