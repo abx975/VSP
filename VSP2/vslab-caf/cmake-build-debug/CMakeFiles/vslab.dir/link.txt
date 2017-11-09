@@ -1,0 +1,1 @@
+/usr/bin/c++  -std=c++11 -Wextra -Wall -pedantic -Wno-gnu-folding-constant -O0 -g  -rdynamic CMakeFiles/vslab.dir/src/main.cpp.o  -o vslab -Wl,-rpath,/usr/local/lib -ldl /usr/local/lib/libcaf_core.so /usr/local/lib/libcaf_io.so 

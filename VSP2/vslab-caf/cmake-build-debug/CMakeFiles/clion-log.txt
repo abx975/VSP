@@ -1,0 +1,22 @@
+/home/lennarthartmann/clion-2017.2.3/bin/cmake/bin/cmake -DCMAKE_BUILD_TYPE=Debug -G "CodeBlocks - Unix Makefiles" /home/lennarthartmann/CLionProjects/vslab-caf
+-- The CXX compiler identification is GNU 5.4.0
+-- Check for working CXX compiler: /usr/bin/c++
+-- Check for working CXX compiler: /usr/bin/c++ -- works
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- libhint: ../actor-framework/build/lib;../caf/build/lib;../../actor-framework/build/lib;../../caf/build/lib;../../../actor-framework/build/lib;../../../caf/build/lib
+-- libhint: ../actor-framework/build/lib;../caf/build/lib;../../actor-framework/build/lib;../../caf/build/lib;../../../actor-framework/build/lib;../../../caf/build/lib
+-- Found Libcaf: /usr/local/lib/libcaf_core.so;/usr/local/lib/libcaf_io.so  found components:  core io 
+-- Configuring done
+CMake Warning (dev) at CMakeLists.txt:38 (add_dependencies):
+  Policy CMP0046 is not set: Error on non-existent dependency in
+  add_dependencies.  Run "cmake --help-policy CMP0046" for policy details.
+  Use the cmake_policy command to set the policy and suppress this warning.
+
+  The dependency target "all_programs" of target "vslab" does not exist.
+This warning is for project developers.  Use -Wno-dev to suppress it.
+
+-- Generating done
+-- Build files have been written to: /home/lennarthartmann/CLionProjects/vslab-caf/cmake-build-debug
