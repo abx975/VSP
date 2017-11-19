@@ -1,0 +1,5 @@
+* Lesen von Datenquelle
+** Wir wollen jede Sekunde einen Slot schreiben
+*** Was passiert wenn kein
+*** Queue und immer rauslesen
+*** bei queue.empty was machen

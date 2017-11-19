@@ -1,0 +1,10 @@
+lnx:
+/media/Data/BTSync/Studium/VS/WS15_16/prakt/03/work/VSP4/startStations.sh <interface> <multicast-address> <receive-port> <from-station-index> <to-station-index> <station-class> [ <UTC-offset-(ms)> ]
+
+ex:
+Example: /media/Data/BTSync/Studium/VS/WS15_16/prakt/03/work/VSP4/startStations.sh eth2 225.10.1.2 16000 1 10 A 2
+
+ex:
+start 1 by Terminal
+java vessel3.Vessel 6 11 | java -jar out/artifacts/vspDREI_jar/vspDREI.jar A wlp4s0 225.10.1.2 15000 3
+

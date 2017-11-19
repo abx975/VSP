@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" build-on-make="true" name="vspDREI:jar">
+    <output-path>$PROJECT_DIR$/out/artifacts/vspDREI_jar</output-path>
+    <root id="archive" name="vspDREI.jar">
+      <element id="module-output" name="vspDREI" />
+    </root>
+  </artifact>
+</component>
