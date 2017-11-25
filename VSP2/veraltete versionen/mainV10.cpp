@@ -1,7 +1,7 @@
 /**
  * @author Nils Eggebrecht
  * @author Lennart Hartmann
- * @version 25.11.2017
+ * @version 11.11.2017
  */
 
 // C++ standard library includes
@@ -9,6 +9,10 @@
 #include <vector>
 #include <sstream>
 #include <iostream>
+#include <algorithm>
+#include <unordered_map>
+#include <bits/stdc++.h>
+#include <time.h>
 #include <sys/time.h>
 #include <random>
 
@@ -22,7 +26,18 @@ CAF_PUSH_WARNINGS
 CAF_POP_WARNINGS
 
 // Own includes
+#include "is_probable_prime.hpp"
 #include "int512_serialization.hpp"
+
+using std::cerr;
+using std::cerr;
+using std::endl;
+using std::find;
+using std::vector;
+using std::string;
+using std::pair;
+using std::unordered_map;
+using boost::multiprecision::int512_t;
 
 using namespace caf;
 using namespace std;
@@ -36,6 +51,8 @@ using namespace boost::multiprecision::literals;
 #define TERMINATING_VALUE 1
 
 using add_mngr_atom = atom_constant<atom("add_mngr")>;
+//using add_client_atom = atom_constant<atom("add_client")>;
+using add_worker_atom = atom_constant<atom("add_worker")>;
 using ack_atom = atom_constant<atom("ack")>;
 using request_atom = atom_constant<atom("request")>;
 using reply_atom = atom_constant<atom("reply")>;
@@ -44,8 +61,11 @@ using new_job_atom = atom_constant<atom("new_job")>;
 using deliver_atom = atom_constant<atom("deliver")>;
 using update_cycles_atom = atom_constant<atom("upd_cycles")>;
 
+
+
 namespace
 {
+
 
 struct numberToSplit
 {
@@ -62,15 +82,16 @@ struct coordinatorState
     vector<actor> managers;
     actor client;
     int512_t N;
-    int512_t cycles_total;
-    int512_t lastSended_N;
+    bool done = true;
     struct numberToSplit num;
-    double walltimeTime;
-    double cpu_time_total;
-    bool iAmBusy = false;
+    double wallStartTime;
     set<int512_t> setOfPrimFactors;
     set<int512_t> setOfFactors;
     set<int512_t> setOfUsedN;
+    int512_t lastSended_N;
+    double cpu_time_total;
+    int512_t cycles_total;
+    bool iAmBusy = false;
 };
 
 //persistant memory for managers
@@ -81,12 +102,15 @@ struct managerState
     int noWorkers = 2;
     numberToSplit prev_Nts;
     double tPrev;
+    //  int512_t cycles_total = 0;
     int512_t prev_cycles=0;
+    //int512_t cycles_last = 0;// todo: toter Code?
 };
 
 template <class Inspector>
 typename Inspector::result_type inspect(Inspector& f, numberToSplit& p)
 {
+    //return f(meta::type_name("numberToSplit"), p.N, p.p, p.isprim, p.cycles);
     return f(meta::type_name("numberToSplit"), p.N, p.p, p.isprim, p.deltaT, p.cycles);
 }
 
@@ -99,6 +123,7 @@ struct config : actor_system_config
 
     config()
     {
+        //add_message_type<int512_t>("add_client");
         add_message_type<numberToSplit>("numberToSplit");
         add_message_type<int512_t>("int512_t");
         add_message_type<vector<int512_t>>("vector<int512_t>");
@@ -110,23 +135,19 @@ struct config : actor_system_config
     }
 };
 
-//funktion to calculate Pollard Roh algorithm
 numberToSplit PollardRho(int512_t N, event_based_actor* self);
-// function to check if a number is a prime
 inline bool IsPrime( int512_t number );
-// power of two int_512t numbers
 int512_t power(int512_t a, int512_t n, int512_t mod);
-// funktion to print a set
+int512_t modular_pow(int512_t base, int512_t exponent, int512_t modulus);
 void printSet(set<int512_t> setToPrint);
-//funktion to get the wall time
 double get_wall_time();
+double get_cpu_time();
 
-// errorCode if PollardRho don't found a factor of N
+
 int512_t errorCode = -99;
-//number of loop-through runs of Pollard Roh per worker per Factor
 static int numPRoh = 0;
 
-
+int512_t Z0 = 210;
 int512_t Z1 = 8806715679; // 3 * 29 * 29 * 71 * 211 * 233
 int512_t Z2 = 0x826efbb5b4c665b9_cppui512; // 9398726230209357241; // 443 * 503 * 997 * 1511 * 3541 * 7907
 int512_t Z3 = 0xc72af6a83cc2d3984fedbe6c1d15e542556941e7_cppui512;
@@ -143,15 +164,16 @@ Z4 = 100060210614380659647872297427366695090390611213179474545733865926684244698
    (26196077648981785233796902948145280025374347621094198197324282087) =
 */
 
-//funktion to calculate Pollard Roh algorithm
+
 numberToSplit PollardRho(int512_t N, event_based_actor* self)
 {
     /* initialize random seed */
-    timeval time;
+    timeval start;
     int useconds;
-    gettimeofday(&time, NULL);
-    useconds = time.tv_usec;
+    gettimeofday(&start, NULL);
+    useconds = start.tv_usec;
     srand(useconds);
+    //srand (time(NULL));
     struct numberToSplit num;
     num.N = N;
 
@@ -175,7 +197,7 @@ numberToSplit PollardRho(int512_t N, event_based_actor* self)
 
     /* the constant in f(x).
      * Algorithm can be re-run with a different a
-     * if iter_factor throws failure for a composite. */
+     * if it throws failure for a composite. */
     int512_t a = (rand()%(N-1))+1;
 
     /* Initialize Difference */
@@ -194,7 +216,7 @@ numberToSplit PollardRho(int512_t N, event_based_actor* self)
 
     do
     {
-        // If Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)): time with a new random number
+        // If Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)): start with a new random number
         if (numberOfRuns >  M)
         {
             cerr << "Pollard is running longer than Middle M 1.18 * sqrt(sqrt(N)):" << M << endl;
@@ -202,13 +224,13 @@ numberToSplit PollardRho(int512_t N, event_based_actor* self)
         }
         if (checkMailboxValue >= 5000)
         {
+
             //checkmailbox;
             if( !self->mailbox().empty() )
             {
                 cerr << "worker got a new job" << endl;
                 self->quit(sec::request_receiver_down);
             }
-            checkMailboxValue = 0;
         }
 
         /* Tortoise Move: x= (x² + a) mod N */
@@ -253,7 +275,7 @@ numberToSplit PollardRho(int512_t N, event_based_actor* self)
 }
 
 
-// power of two int_512t numbers
+// Check Prime
 int512_t power(int512_t a, int512_t n, int512_t mod)
 {
     int512_t power = a,result=1;
@@ -268,7 +290,6 @@ int512_t power(int512_t a, int512_t n, int512_t mod)
     return result;
 }
 
-// help funktion for IsPrime
 bool witness(int512_t a, int512_t n)
 {
     int512_t t,u,i;
@@ -295,13 +316,12 @@ bool witness(int512_t a, int512_t n)
     return false;
 }
 
-// function to check if a number is a prime
 inline bool IsPrime( int512_t number )
 {
     if ( ( (!(number & 1)) && number != 2 ) || (number < 2) || (number % 3 == 0 && number != 3) )
         return (false);
 
-    if(number < 1373653)
+    if(number<1373653)
     {
         for( int k = 1; 36*k*k-12*k < number; ++k)
             if ( (number % (6*k+1) == 0) || (number % (6*k-1) == 0) )
@@ -318,13 +338,13 @@ inline bool IsPrime( int512_t number )
         return true;
     }
 
+
     if(witness(2,number)) return false;
     if(witness(7,number)) return false;
     if(witness(61,number)) return false;
     return true;
 }
 
-// funktion to print a set
 void printSet(set<int512_t> setToPrint)
 {
     if(setToPrint.size() > 0)
@@ -341,56 +361,67 @@ void printSet(set<int512_t> setToPrint)
         cerr << "The Set is empty" << endl;
     }
 }
-//funktion to get the wall time
+
 double get_wall_time()
 {
     struct timeval time;
     if (gettimeofday(&time,NULL))
     {
+        //  Handle error
         return 0;
     }
     return (double)time.tv_sec + (double)time.tv_usec * .000001;
 }
 
-//function to evaluate the Result of the worker
+
 void evaluate(coordinatorState& state)
 {
-    //if factor prime add to setOfPrimFactors
     if(state.num.isprim == true)
     {
         state.setOfPrimFactors.insert(state.num.p);
+        //                cerr << " Neue Primzahl gefunden: The Primfactors are: ";
+        //                printSet( self->state.setOfPrimFactors);
+        //cerr << "Found new Primfaktor: The new Primfaktor is: " << state.num.p << endl;
     }
 
-    //if not add to setOfFactors
+    //wenn nicht dann insert p in Faktoren
     else
     {
         state.setOfFactors.insert(state.num.p);
     }
 
+    // für jede zahl in Fakroten:
+    set<int512_t>::iterator it;
 
-    set<int512_t>::iterator iter_factor;
+    // für alle fakroten testen ob sie durch die gefundene Primzahl teilbar sind
 
-    // check for all faktors whether it is a divisor of the number
-    for(iter_factor= state.setOfFactors.begin(); iter_factor!= state.setOfFactors.end(); ++iter_factor)
+    for(it= state.setOfFactors.begin(); it!= state.setOfFactors.end(); ++it)
     {
-        int512_t cache = *iter_factor;
+        int512_t zwischenspeicher = *it;
 
-        while (cache % state.num.p == 0)
+        // dividiere durch num.p bis != 0
+        while (zwischenspeicher % state.num.p == 0)
         {
-            cache/= state.num.p;
+            zwischenspeicher/= state.num.p;
         }
+        // insert das neue N
 
-        bool zwiIsprime = IsPrime(cache);
-        if(cache > 1 && !zwiIsprime)
+        bool zwiIsprime = IsPrime(zwischenspeicher);
+        if(zwischenspeicher > 1 && !zwiIsprime)
         {
-            state.setOfFactors.insert(cache);
+//                                    cerr<< "INSERT  self->state.setOfFactors.insert(" << zwischenspeicher << ");" << endl;
+            state.setOfFactors.insert(zwischenspeicher);
         }
-        else if(cache > 1 && zwiIsprime)
+        else if(zwischenspeicher > 1 && zwiIsprime)
         {
-            state.setOfPrimFactors.insert(cache);
-            state.setOfFactors.erase(cache);
+//                                    cerr<< "INSERT  self->state.setOfPrimFactors.insert(" << zwischenspeicher << ");" << endl;
+            state.setOfPrimFactors.insert(zwischenspeicher);
+            state.setOfFactors.erase(zwischenspeicher);
+
+//                                    cerr << "Found new Primfaktor: The new Primfaktor is: " << zwischenspeicher << endl;
         }
     }
+//                            cerr<< "ERASE  self->state.setOfFactors.erase(" << self->state.num.N << ");" << endl;
     state.setOfFactors.erase(state.num.N);
 }
 
@@ -399,22 +430,20 @@ behavior worker(event_based_actor *self)
 {
     return
     {
+        //stub
         [=](numberToSplit nts) -> numberToSplit {
             if (nts.N != TERMINATING_VALUE)
             {
+                nts.cycles = 0;
                 cerr << "worker erreicht" << endl;
                 struct numberToSplit num;
                 num = nts;
-
-                //reset old cycles
-                nts.cycles = 0;
-                //run to find a facor of num.N
                 num = PollardRho(num.N, self);
                 {
                     while (num.p == errorCode)
                         num = PollardRho(num.N, self);
                 }
-                // set is_prim value
+
                 if (IsPrime(num.p))
                 {
                     num.isprim = true;
@@ -423,6 +452,10 @@ behavior worker(event_based_actor *self)
                 {
                     num.isprim = false;
                 }
+
+                cerr << "worker " << self->address().id() << " läuft durch; num.N: " << num.N
+                     << " num.p: " << num.p << endl;
+
                 return num;
             }
         }
@@ -457,7 +490,8 @@ behavior manager(stateful_actor<managerState> *self, actor_system* sys_ptr, stri
     //respawn dead worker and repeat previous request
     self->set_down_handler([=](const down_msg &dm)
     {
-        cerr << "retime worker" << endl;
+
+        cerr << "restart worker" << endl;
         self->state.workers.erase(std::remove(self->state.workers.begin(),
                                               self->state.workers.end(), dm.source), self->state.workers.end());
         auto replacement_worker = self->spawn<monitored>(worker);
@@ -468,9 +502,10 @@ behavior manager(stateful_actor<managerState> *self, actor_system* sys_ptr, stri
 
     return
     {
-        // handle a new job and send it to his workers
         [=](new_job_atom, numberToSplit nts)
         {
+
+
             cerr << "manager got a new job with nts.n = " << nts.N << endl;
             self->state.prev_Nts = nts;
             self->state.tPrev=get_wall_time();
@@ -481,19 +516,19 @@ behavior manager(stateful_actor<managerState> *self, actor_system* sys_ptr, stri
                 self->send(worker, nts);
             }
         },
-        // handle the answer of a worker
         [=](numberToSplit nts)
         {
             if(nts.p != TERMINATING_VALUE)
             {
+
                 self->state.prev_cycles = nts.cycles;
                 nts.deltaT = get_wall_time()-self->state.tPrev;
                 self->state.tPrev = get_wall_time();
+                cout << "nts.deltaT = get_wall_time()-self->state.tPrev; " << nts.deltaT<< endl;
                 self->send(self->state.server, deliver_atom::value, nts);
                 nts.cycles = 0;
             }
         },
-        //reset all workers of an manager
         [=](reset_atom)
         {
             numberToSplit nts;
@@ -504,7 +539,6 @@ behavior manager(stateful_actor<managerState> *self, actor_system* sys_ptr, stri
                 self->send(worker,nts);
             }
         },
-        // ack manager connect successful
         [=](ack_atom)
         {
             cerr << "manager:connect successful" << endl;
@@ -520,7 +554,6 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
     {
         if (dm.source == self->state.client)
         {
-            self->state.iAmBusy = false;
             cerr << "coordinator: client down" << endl;
             for (auto manager:self->state.managers)
             {
@@ -540,10 +573,6 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
                                                            self->state.managers.end(), dm.source), self->state.managers.end());
                 }
             }
-            self->state.iAmBusy = false;
-            string retval = "I have no manager, try again later!";
-            self->send(self->state.client, reply_atom::value, retval);
-
             if (!identified)
             {
                 cerr << "coordinator: can't determine down_msg source" << endl;
@@ -553,12 +582,12 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
 
     return
     {
-        // count the cycles of the worker
+        ////////////////////////////////////////////
         [=](update_cycles_atom,int512_t manager_cycles)
         {
             self->state.cycles_total+=  manager_cycles;
         },
-        //add a manager
+        ////////////////////////////////////////////
         [=](add_mngr_atom)
         {
             cerr << "got new manager" << endl;
@@ -574,53 +603,54 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
                 self->send(mngr, ack_atom::value);
             }
         },
-        //request from a Client and handle the request
         [=](request_atom, int512_t N)
         {
-            //if busy handling
             if(self->state.iAmBusy == true)
             {
+                // string zurückgeben
                 string retval = "I am busy, try again later!";
                 self->send(actor_cast<actor>(self->current_sender()), reply_atom::value, retval);
             }
-            //reset all before start the new task
             else
             {
                 self->state.iAmBusy = true;
+                self->state.done = false;
+                self->state.N=N;
+
                 self->state.setOfFactors.clear();
                 self->state.setOfPrimFactors.clear();
                 self->state.setOfUsedN.clear();
-                self->state.cpu_time_total=0.0;
-                self->state.cycles_total=0;
+
+                // client sendet an den Server das N und speichert es in self->state.N
                 self->state.N = N;
                 self->state.num.N = N;
+
+                //  Start Timer
+                self->state.wallStartTime = get_wall_time();
+                self->state.cpu_time_total=0.0;
+                self->state.cycles_total=0;
                 cerr << "N: " << self->state.num.N << endl;
 
-                //  start Timer
-                self->state.walltimeTime = get_wall_time();
-
-                //if the task is a prime answer don*t start the worker and return directly
                 if(IsPrime(self->state.num.N) || self->state.num.N == 1)
                 {
                     self->state.num.p = 1;
                     self->state.num.isprim = true;
                     self->state.client = actor_cast<actor>(self->current_sender());
-
+                    // string Stream erzeugen
                     stringstream s;
+                    // Print setOfPrimFactors
                     s << N << " is a prim";
+                    // string zurückgeben
                     string retval = s.str();
-                    self->state.iAmBusy = false;
                     self->send(self->state.client, reply_atom::value, retval);
                 }
                 else
                 {
                     self->state.setOfFactors.insert(self->state.num.N);
+                    //ende : client sendet an den Server das N und spwichert es in self->state.N
                     if (self->state.managers.size() == 0)
                     {
-                        self->state.iAmBusy = false;
                         cerr << "no managers available" << endl;
-                        string retval = "I have no manager, try again later!";
-                        self->send(actor_cast<actor>(self->current_sender()), reply_atom::value, retval);
                     }
                     else
                     {
@@ -634,13 +664,16 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
                             cerr << "sever sendet; num.N:" << self->state.num.N << endl;
                             self->send(manager, new_job_atom::value, self->state.num);
                         }
+
                     }
+
                 }
             }
         },
         //redistribution after receiving result
         [=](deliver_atom, numberToSplit nts)
         {
+
             bool isFirstN = true;
             set<int512_t>::iterator iter;
             for(iter=self->state.setOfUsedN.begin(); iter!=self->state.setOfUsedN.end(); ++iter)
@@ -653,33 +686,38 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
             if (isFirstN == true)
             {
                 self->state.setOfUsedN.insert(nts.N);
+
+                cerr << "nts.deltaT = get_wall_time()-self->state.tPrev; " << nts.deltaT<< endl;
+
                 self->state.cycles_total=self->state.cycles_total+nts.cycles;
                 self->state.cpu_time_total+=nts.deltaT;
+                cerr << "new delta: " << nts.deltaT << "    cpu_time_total: " << self->state.cpu_time_total << endl;
                 self->state.num = nts;
                 evaluate(self->state);
 
                 if ( self->state.setOfFactors.empty())
                 {
                     //  Stop timers
+                    self->state.done = true;
                     double wallEndTime = get_wall_time();
-                    double wallTime = wallEndTime - self->state.walltimeTime;
+                    double wallTime = wallEndTime - self->state.wallStartTime;
                     double cpuTime = self->state.cpu_time_total;
 
-                    stringstream s;
+                    stringstream s;// string Stream erzeugen
                     s << "Number of Runs: " << self->state.cycles_total << endl;
                     s << "Wall Time = " << wallTime << endl;
                     s << "CPU Time  = " << cpuTime << endl;
                     self->state.cycles_total = 0;
                     self->state.num.cycles = 0;
 
-                    // add setOfPrimFactors to the output string
+                    // Print setOfPrimFactors
                     s << "The Primfactors for N are: ";
                     set<int512_t>::iterator iter;
                     for(iter=self->state.setOfPrimFactors.begin(); iter!=self->state.setOfPrimFactors.end(); ++iter)
                     {
                         s << *iter << " " ;
                     }
-                    string retval = s.str();
+                    string retval =s.str(); // string zurückgeben
                     cerr << retval << endl;
                     self->state.iAmBusy = false;
                     self->send(self->state.client, reply_atom::value, retval);
@@ -687,9 +725,8 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
                 else
                 {
                     set<int512_t>::iterator iter =  self->state.setOfFactors.begin();
-                    // every factor is distributed in turn,
-                    // when there are no more factors, it starts all over again
-                    int i = 0;
+                    // der reihe nach wird jeder faktor verteilt, wenn keine Faktoren mehr da sind beginnt er von vorn
+                    int i= 0;
                     self->state.num.N = *iter;
                     if (self->state.lastSended_N != self->state.num.N)
                     {
@@ -699,7 +736,9 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
                             self->state.num.N = *iter;
                             self->state.lastSended_N = *iter;
                             self->state.num.cycles = 0;
+
                             self->send(manager, new_job_atom::value, self->state.num);
+
                             if(i %  self->state.setOfFactors.size() == 0)
                             {
                                 iter = self->state.setOfFactors.begin();
@@ -718,51 +757,27 @@ behavior coordinator(stateful_actor<coordinatorState> *self)
             }
         }
     };
-}
 
-//launching server as coordinator
+}
 void run_server(actor_system &sys, const config &cfg)
 {
     cerr << "run_server" << endl;
     auto &mm = sys.middleman();
+    //launching server as coordinator
     mm.publish(sys.spawn(coordinator), cfg.port);
 
 }
-// start manager
+
 void run_manager(actor_system &sys, const config &cfg)
 {
     cerr << "run_manager" << endl;
     sys.spawn(manager,&sys,cfg.host,cfg.port,cfg.num_workers);
 }
-// start manager
+
 void run_client(actor_system &sys, const config &cfg)
 {
     cerr << "run_client" << endl;
-    int512_t N = 0;
-    string inputString = "";
-    cout << "Bitte geben Sie eine Zahl ein!" << endl;
-    cin >> N;
-    if(N == -1)
-    {
-        N = Z1;
-    }
-    else if(N == -2)
-    {
-        N = Z2;
-    }
-    else if(N == -3)
-    {
-        N = Z3;
-    }
-    else if(N == -4)
-    {
-        N = Z4;
-    }
-
-
-    cout << "Bitte warten bis die Zahl zerlegt wurde." << endl;
-
-
+    int512_t N = Z3;
     auto &mm = sys.middleman();
     //server handle
     auto serv_hndl = mm.remote_actor(cfg.host, cfg.port);
@@ -774,7 +789,6 @@ void run_client(actor_system &sys, const config &cfg)
     {
         scoped_actor self{sys};
         self->send(*serv_hndl,request_atom::value,N);
-        //send request to server and print the answer of the server
         self->receive([&](reply_atom, string s)
         {
             cerr << "done! result: " << endl << s << endl;
@@ -801,7 +815,7 @@ void caf_main(actor_system &sys, const config &cfg)
     {
         cerr << "*** invalid mode specified" << endl;
     }
-}
+} // namespace <anonymous>
 }
 CAF_MAIN(io::middleman)
 
