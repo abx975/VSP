@@ -15,7 +15,11 @@ public class Sender extends TimerTask{
 	public static final int TTL=1;
 	MessageBuffer srcReader=null; //debug only
 	
+	//management info
 	private int msgCount=0;
+	private char stationType = 'A';
+	private long localTimeOffset=0;
+	private int timeslot=0;
 	
 	//Conection info
 	private int port;
@@ -61,7 +65,38 @@ public class Sender extends TimerTask{
 		this.srcReader=srcReader;
 	}
 	
+	/**
+	 * getter
+	 * @return number of messages sent
+	 */
+	public int getMsgCount(){
+		return msgCount;
+	}
 	
+	/**
+	 * setter
+	 * @param stationType	the reliability class of this Stations clock
+	 */
+	public void setStationType(char stationType){
+		this.stationType=stationType;
+	}
+	
+	/**
+	 * setter
+	 * @param localTimeOffset	the desired inaccuracy
+	 */
+	public void setLocalTimeOffset(long localTimeOffset) {
+		this.localTimeOffset = localTimeOffset;
+	} 
+	
+	/**
+	 * setter
+	 * @param timeslot	the Timeslot to be used
+	 */
+	public void setTimeslot(int timeslot){
+		this.timeslot = timeslot;
+	}
+		
 	public void run() {
 		//todo:real implementation
 		System.err.print("Sender Got frame: ");

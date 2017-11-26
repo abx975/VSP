@@ -170,7 +170,6 @@ public class VS3Messages {
 
 	/**
 	 * Creates a new message according to protocol
-	 * 
 	 * @param type
 	 *            the sending station's type
 	 * @param message

@@ -77,26 +77,13 @@ public class Receiver extends Observable implements Runnable{
 		while (runninig){
 			if(Thread.currentThread().isInterrupted()){
 				runninig = false;
-			}
-//////////////////////// alter Test ///////////////////////////////
-//			if(Thread.currentThread().isInterrupted())break;
-//			//todo:receive
-//			try{
-//				Thread.sleep(4000);
-//			}catch(Exception e){
-//				System.err.println("Receiver:wait failed");
-//				e.printStackTrace();
-//			}
-//			setChanged();
-//			notifyObservers(srcRdr.getFrame());
-//			System.err.println("receive blocked");
-///////////////////////////////////////////////////////////////////			
+			}		
 			receiveBuff = new byte[MESSAGE_SIZE];
 			DatagramPacket packet = new DatagramPacket(receiveBuff,receiveBuff.length);
 			try {
 				socket.receive(packet);
 				setChanged();
-				notifyObservers(packet);
+				notifyObservers(packet.getData());
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
