@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.util.Observable;
 import java.util.Observer;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -12,11 +13,18 @@ import java.util.Arrays;
  */
 public class Station implements Observer{
 	//constants
+	public static final int ARGS_EXPECTED = 5;
 	public static final int NO_OF_THREADS = 24;
 	public static final int TIMESLOT_WIDTH = 40;
 	public static final int TIMESLOT_OFFSET_MIDDLE = TIMESLOT_WIDTH/2;
+	//default values
+	public static final String defaultType = "A";
+	public static final String defaultInterface = "wlp4s0";
+	public static final String default_Host = "225.10.1.2";
+	public static final String defaultPort = "15000";
+	public static final String defaultClockCorrection = "0";
 	
-	//constants	
+	//variables	
 	private int timeslot;
 	private ScheduledThreadPoolExecutor threadpool;
 	private Receiver receiver;
@@ -24,14 +32,13 @@ public class Station implements Observer{
 	private Thread rcvThread;
 	private Thread sendThread;
 	
-	
 	/**
 	 * Constructor
 	 */
-	public Station(){
+	public Station(char stationType, String mCastIP, int port, String interf, long clockCorrection){
 		threadpool = new ScheduledThreadPoolExecutor(NO_OF_THREADS);
-		receiver = new Receiver();
-		sender = new Sender();
+		receiver = new Receiver(stationType, interf, mCastIP, port, clockCorrection);
+		sender = new Sender(mCastIP, port, interf);
 		rcvThread = new Thread(receiver);
 		sendThread = new Thread(sender);
 		receiver.addObserver(this);
@@ -49,25 +56,31 @@ public class Station implements Observer{
 		//setSchedule(startTime, interval);
 	}
 
+	
 	/**
 	 * Updates schedule for sending messages
 	 */
 	private void setSchedule(long startTime,long interval){
-		threadpool.scheduleAtFixedRate(new Sender(), startTime, interval, TimeUnit.MILLISECONDS);
+		threadpool.scheduleAtFixedRate(sender, startTime, interval, TimeUnit.MILLISECONDS);
 	}
 	
 	
 	public static void main(String[] args) {
-//		byte[] msg = "Hallozusammen".getBytes();
-//		byte[] msge = Arrays.copyOfRange(msg, 5,msg.length);
-//		System.err.println("Char: " + new String(msge));
+		if(args.length!=ARGS_EXPECTED){
+			args=new String[ARGS_EXPECTED];
+			args[0]=defaultType;
+			args[1]=defaultInterface;
+			args[2]=default_Host;
+			args[3]=defaultPort;
+			args[4]=defaultClockCorrection;
+		}
 
 		byte[] msg = MessageBuffer.getInstance().getFrame();
-		long lng = Long.parseLong(new String(Arrays.copyOfRange(msg, 26, 33)));
-		System.err.println("sendtime: " + lng);
+//		long lng = Long.parseLong(new String(Arrays.copyOfRange(msg, 26, 33)));
+//		System.err.println("sendtime: " + lng);
 		
-		////////////////////////////
-		Station station=new Station();
+		//public Station(char stationType, String mCastIP, int port, String interf, long clockCorrection)
+		Station station=new Station(args[0].charAt(0),args[2], Integer.parseInt(args[3]),"localhost", Long.parseLong(args[4]));
 		station.setSchedule(0, 2000);
 		station.rcvThread.start();
 		MessageBuffer.getInstance();

@@ -19,7 +19,6 @@ public class VS3Messages {
 	public static final int NEXT_SLOT_IDX = 25;
 	public static final int SEND_TIME_START = 26;
 	public static final int SEND_TIME_END = 33;
-
 	public static final int ZERO_IDX = 0;
 
 	/**

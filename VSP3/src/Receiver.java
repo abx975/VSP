@@ -1,5 +1,6 @@
 import java.net.*;
 import java.util.Observable;
+import java.io.IOException;
 import java.lang.Runnable;
 
 /**
@@ -9,49 +10,97 @@ import java.lang.Runnable;
  */
 public class Receiver extends Observable implements Runnable{
 
-	//Interface Address
-//	private String interf;
-//	private int port;
-	private InetAddress ipAddr;
+	public static final int MESSAGE_SIZE = 34; 
+	private String interf;
+	private InetAddress mCastAddr;
 	private MulticastSocket socket;
-//	private int syncOffset;
-	//management variables
-	private int currentSlot;
-	private int nextSlot;
+	
+	byte[] receiveBuff;
 
-	private boolean runninig=true;
+	
 	MessageBuffer srcRdr=null;//provisional
 	
 	/**
 	 * Constructor
+	 * @throws IOException 
 	 */
-	public Receiver(){
+	public Receiver() throws IOException{
 		srcRdr = MessageBuffer.getInstance();
+		socket = new MulticastSocket();
+		socket.joinGroup(this.mCastAddr);
+		socket.setNetworkInterface(NetworkInterface.getByName(this.interf));
 	}
 	
 	/**
 	 * Constructor
 	 * @param srcRdr	a specific input reader for testing purposes
+	 * @throws IOException 
 	 */
-	public Receiver(MessageBuffer srcRdr){
+	public Receiver(MessageBuffer srcRdr) throws IOException{
 		this.srcRdr=srcRdr;
+		socket = new MulticastSocket();
+		socket.joinGroup(this.mCastAddr);
+		socket.setNetworkInterface(NetworkInterface.getByName(this.interf));
+	}
+	
+	/**
+	 * Constructor actually in use
+	 * @param stationType	clock reliability class
+	 * @param interf	interface in use
+	 * @param host	hostaddress
+	 * @param port	port in use
+	 * @param clockCorrection	deliberate clock inaccuracy
+	 */
+	public Receiver(char stationType, String interf, String host, int port, long clockCorrection){
+		this.interf=interf;
+		try {
+			socket = new MulticastSocket(port);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		try {
+			this.mCastAddr=InetAddress.getByName(host);
+		} catch (UnknownHostException e) {
+			e.printStackTrace();
+		}
+		try {
+			socket.joinGroup(mCastAddr);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		
 	}
 	
 	public void run() {
 		System.err.println("Receiver launching");
-		// TODO Auto-generated method stub
-		while (runninig){		
-			if(Thread.currentThread().isInterrupted())break;
-			//todo:receive
-			try{
-				Thread.sleep(4000);
-			}catch(Exception e){
-				System.err.println("Receiver:wait failed");
+		boolean runninig=true;
+		while (runninig){
+			if(Thread.currentThread().isInterrupted()){
+				runninig = false;
+			}
+//////////////////////// alter Test ///////////////////////////////
+//			if(Thread.currentThread().isInterrupted())break;
+//			//todo:receive
+//			try{
+//				Thread.sleep(4000);
+//			}catch(Exception e){
+//				System.err.println("Receiver:wait failed");
+//				e.printStackTrace();
+//			}
+//			setChanged();
+//			notifyObservers(srcRdr.getFrame());
+//			System.err.println("receive blocked");
+///////////////////////////////////////////////////////////////////			
+			receiveBuff = new byte[MESSAGE_SIZE];
+			DatagramPacket packet = new DatagramPacket(receiveBuff,receiveBuff.length);
+			try {
+				socket.receive(packet);
+				setChanged();
+				notifyObservers(packet);
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			setChanged();
-			notifyObservers(srcRdr.getFrame());
-			System.err.println("receive blocked");
 		}
+		socket.close();
 	}	
 }
